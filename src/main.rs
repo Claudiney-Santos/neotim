@@ -130,7 +130,7 @@ fn main() -> Result<(), anyhow::Error> {
 
     Command::new("stty").args(["raw", "-echo"]).status()?;
 
-    // print!("{CLEAR_SCREEN}");
+    print!("{CLEAR_SCREEN}");
     ctx.print_all();
     ctx.go_to(0, 0);
 
@@ -170,6 +170,28 @@ fn main() -> Result<(), anyhow::Error> {
                     ctx.x -= 1;
                 }
             }
+            (Mode::Insert, '\n' | '\r') => {
+                if ctx.x == 0 {
+                    // prin!("\x1b[K");
+                    prin!("\r\n");
+                    prin!("\x1b[1L");
+                    ctx.content.insert(ctx.y, String::from("\r\n"));
+                    ctx.y += 1;
+                    print!("{}", ctx.content[ctx.y]);
+                } else {
+                    prin!("\x1b[K");
+                    prin!("\r\n");
+                    prin!("\x1b[1L");
+                    let after = ctx.content[ctx.y].split_off(ctx.x);
+                    ctx.x = 0;
+                    ctx.y += 1;
+                    print!("{after}");
+                    ctx.content.insert(ctx.y, after);
+                    ctx.up(1);
+                    // prin!("\x1b[1S"); // Empurra todo o texto 1 linha para cima
+                    // break line;
+                }
+            }
             (Mode::Insert, c) => {
                 prin!("\x1b[1@{}", c); // Write aside right letters
                 ctx.content[ctx.y].insert(ctx.x, c);
@@ -180,7 +202,8 @@ fn main() -> Result<(), anyhow::Error> {
     }
 
     Command::new("stty").arg("sane").status()?;
-    // print!("{CLEAR_SCREEN}");
+    print!("{CLEAR_SCREEN}");
+    ctx.print_all();
 
     Ok(())
 }

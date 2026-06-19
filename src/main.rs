@@ -1,7 +1,7 @@
 use std::{
-    fs,
+    env, fs,
     io::{Read, stdin},
-    process::{Command, exit},
+    process::Command,
 };
 
 macro_rules! prin {
@@ -13,7 +13,7 @@ macro_rules! prin {
 
 const CLEAR_SCREEN: &str = "\x1b[2J\x1b[H";
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy)]
 enum Mode {
     Normal,
     // VISUAL,
@@ -96,7 +96,7 @@ impl Ctx {
     }
 }
 
-fn exec_command(ctx: &Ctx) -> Result<(), anyhow::Error> {
+fn exec_command(ctx: &Ctx) -> Result<bool, anyhow::Error> {
     let mut result = String::from(":");
 
     loop {
@@ -114,20 +114,23 @@ fn exec_command(ctx: &Ctx) -> Result<(), anyhow::Error> {
     }
 
     if result.contains("q") {
-        Command::new("stty").arg("sane").status()?;
-        print!("{CLEAR_SCREEN}");
-        exit(0);
+        return Ok(true);
     }
 
-    Ok(())
+    Ok(false)
 }
 
 fn main() -> Result<(), anyhow::Error> {
-    let mut ctx = Ctx::new("tests")?;
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 2 {
+        panic!("You need to provide the file path!");
+    }
+
+    let mut ctx = Ctx::new(&args[1])?;
 
     Command::new("stty").args(["raw", "-echo"]).status()?;
 
-    print!("{CLEAR_SCREEN}");
+    // print!("{CLEAR_SCREEN}");
     ctx.print_all();
     ctx.go_to(0, 0);
 
@@ -135,51 +138,49 @@ fn main() -> Result<(), anyhow::Error> {
         let mut key = [0; 1];
         stdin().read_exact(&mut key)?;
 
-        if ctx.mode == Mode::Normal {
-            match key[0] as char {
-                'q' => break,
-                'h' => ctx.left(1),
-                'j' => ctx.down(1),
-                'k' => ctx.up(1),
-                'l' => ctx.right(1),
-                'i' => {
-                    ctx.mode = Mode::Insert;
-                    ctx.thin_cursor();
-                }
-                ':' => exec_command(&ctx)?,
-                _ => {}
+        match (ctx.mode, key[0] as char) {
+            (Mode::Normal, 'h') => ctx.left(1),
+            (Mode::Normal, 'j') => ctx.down(1),
+            (Mode::Normal, 'k') => ctx.up(1),
+            (Mode::Normal, 'l') => ctx.right(1),
+            (Mode::Normal, 'i') => {
+                ctx.mode = Mode::Insert;
+                ctx.thin_cursor();
             }
-        } else {
-            match key[0] as char {
-                '\x1b' => {
-                    ctx.mode = Mode::Normal;
-                    ctx.block_cursor();
+            (Mode::Normal, ':') => {
+                if exec_command(&ctx)? {
+                    break;
                 }
-                '\x7f' => {
-                    if ctx.x as i32 > 0 {
-                        ctx.content[ctx.y].remove(ctx.x);
-                        let rest = &ctx.content[ctx.y][ctx.x..ctx.content[ctx.y].len() - 2];
-                        prin!("\x08");
-                        prin!("\x1b[K");
-                        prin!("{rest}");
-                        let rest_size = rest.chars().count();
-                        if rest_size > 0 {
-                            prin!("\x1b[{}D", rest_size); // Move o cursor 'n' vezes para a esquerda
-                        }
-                        ctx.x -= 1;
+            }
+            (Mode::Insert, '\x1b') => {
+                ctx.mode = Mode::Normal;
+                ctx.block_cursor();
+            }
+            (Mode::Insert, '\x7f') => {
+                if ctx.x as i32 > 0 {
+                    ctx.content[ctx.y].remove(ctx.x);
+                    let rest = &ctx.content[ctx.y][ctx.x..ctx.content[ctx.y].len() - 2];
+                    prin!("\x08");
+                    prin!("\x1b[K");
+                    prin!("{rest}");
+                    let rest_size = rest.chars().count();
+                    if rest_size > 0 {
+                        prin!("\x1b[{}D", rest_size); // Move o cursor 'n' vezes para a esquerda
                     }
-                }
-                c => {
-                    prin!("\x1b[1@{}", c); // Write aside right letters
-                    ctx.content[ctx.y].insert(ctx.x, c);
-                    ctx.x += 1;
+                    ctx.x -= 1;
                 }
             }
+            (Mode::Insert, c) => {
+                prin!("\x1b[1@{}", c); // Write aside right letters
+                ctx.content[ctx.y].insert(ctx.x, c);
+                ctx.x += 1;
+            }
+            _ => {}
         }
     }
 
     Command::new("stty").arg("sane").status()?;
-    print!("{CLEAR_SCREEN}");
+    // print!("{CLEAR_SCREEN}");
 
     Ok(())
 }

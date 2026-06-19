@@ -23,13 +23,14 @@ enum Mode {
 struct Ctx {
     mode: Mode,
     content: Vec<String>,
+    path: String,
     x: usize,
     y: usize,
 }
 
 impl Ctx {
-    fn new() -> Result<Self, anyhow::Error> {
-        let content = fs::read_to_string("./README.md")?
+    fn new(path: &str) -> Result<Self, anyhow::Error> {
+        let content = fs::read_to_string(path)?
             .split("\n")
             .map(|l| format!("{l}\r\n"))
             .collect::<Vec<String>>();
@@ -37,6 +38,7 @@ impl Ctx {
         Ok(Self {
             mode: Mode::Normal,
             content,
+            path: path.to_owned(),
             x: 0,
             y: 0,
         })
@@ -87,9 +89,14 @@ impl Ctx {
             prin!("{line}");
         }
     }
+
+    fn save(&self) {
+        fs::write(&self.path, self.content.concat().replace("\r", ""))
+            .expect("Failed to write to file");
+    }
 }
 
-fn exec_command(_: &Ctx) -> Result<(), anyhow::Error> {
+fn exec_command(ctx: &Ctx) -> Result<(), anyhow::Error> {
     let mut result = String::from(":");
 
     loop {
@@ -103,7 +110,7 @@ fn exec_command(_: &Ctx) -> Result<(), anyhow::Error> {
     }
 
     if result.contains("w") {
-        // #TODO: Save content
+        ctx.save();
     }
 
     if result.contains("q") {
@@ -116,7 +123,7 @@ fn exec_command(_: &Ctx) -> Result<(), anyhow::Error> {
 }
 
 fn main() -> Result<(), anyhow::Error> {
-    let mut ctx = Ctx::new()?;
+    let mut ctx = Ctx::new("tests")?;
 
     Command::new("stty").args(["raw", "-echo"]).status()?;
 
@@ -147,6 +154,20 @@ fn main() -> Result<(), anyhow::Error> {
                 '\x1b' => {
                     ctx.mode = Mode::Normal;
                     ctx.block_cursor();
+                }
+                '\x7f' => {
+                    if ctx.x as i32 > 0 {
+                        ctx.content[ctx.y].remove(ctx.x);
+                        let rest = &ctx.content[ctx.y][ctx.x..ctx.content[ctx.y].len() - 2];
+                        prin!("\x08");
+                        prin!("\x1b[K");
+                        prin!("{rest}");
+                        let rest_size = rest.chars().count();
+                        if rest_size > 0 {
+                            prin!("\x1b[{}D", rest_size); // Move o cursor 'n' vezes para a esquerda
+                        }
+                        ctx.x -= 1;
+                    }
                 }
                 c => {
                     prin!("\x1b[1@{}", c); // Write aside right letters

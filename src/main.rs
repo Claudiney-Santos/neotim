@@ -1,100 +1,10 @@
 use std::{
-    env, fs,
+    env,
     io::{Read, stdin},
-    process::Command,
+    process::{Command, exit},
 };
 
-macro_rules! prin {
-    ($($arg:tt)*) => {{
-        print!($($arg)*);
-        std::io::Write::flush(&mut std::io::stdout()).expect("Error on flush prin!");
-    }};
-}
-
-const CLEAR_SCREEN: &str = "\x1b[2J\x1b[H";
-
-#[derive(PartialEq, Clone, Copy)]
-enum Mode {
-    Normal,
-    // VISUAL,
-    Insert,
-}
-
-struct Ctx {
-    mode: Mode,
-    content: Vec<String>,
-    path: String,
-    x: usize,
-    y: usize,
-}
-
-impl Ctx {
-    fn new(path: &str) -> Result<Self, anyhow::Error> {
-        let content = fs::read_to_string(path)?
-            .split("\n")
-            .map(|l| format!("{l}\r\n"))
-            .collect::<Vec<String>>();
-
-        Ok(Self {
-            mode: Mode::Normal,
-            content,
-            path: path.to_owned(),
-            x: 0,
-            y: 0,
-        })
-    }
-
-    fn up(&mut self, n: usize) {
-        if self.y as i32 - n as i32 >= 0 {
-            self.y -= n;
-            prin!("\x1b[{n}A")
-        }
-    }
-
-    fn down(&mut self, n: usize) {
-        if self.y + n < self.content.len() {
-            self.y += n;
-            prin!("\x1b[{n}B")
-        }
-    }
-
-    fn right(&mut self, n: usize) {
-        self.x += n;
-        prin!("\x1b[{n}C")
-    }
-
-    fn left(&mut self, n: usize) {
-        if self.x as i32 - n as i32 >= 0 {
-            self.x -= n;
-            prin!("\x1b[{n}D")
-        }
-    }
-
-    fn go_to(&mut self, x: usize, y: usize) {
-        self.x = x;
-        self.y = y;
-        prin!("\x1b[{y};{x}H");
-    }
-
-    fn thin_cursor(&self) {
-        prin!("\x1b[6 q");
-    }
-
-    fn block_cursor(&self) {
-        prin!("\x1b[2 q");
-    }
-
-    fn print_all(&self) {
-        for line in self.content.iter() {
-            prin!("{line}");
-        }
-    }
-
-    fn save(&self) {
-        fs::write(&self.path, self.content.concat().replace("\r", ""))
-            .expect("Failed to write to file");
-    }
-}
+use ti::{context::*, *};
 
 fn exec_command(ctx: &Ctx) -> Result<bool, anyhow::Error> {
     let mut result = String::from(":");
@@ -123,7 +33,8 @@ fn exec_command(ctx: &Ctx) -> Result<bool, anyhow::Error> {
 fn main() -> Result<(), anyhow::Error> {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        panic!("You need to provide the file path!");
+        eprintln!("You need to provide the file path!");
+        exit(1);
     }
 
     let mut ctx = Ctx::new(&args[1])?;
@@ -132,7 +43,7 @@ fn main() -> Result<(), anyhow::Error> {
 
     print!("{CLEAR_SCREEN}");
     ctx.print_all();
-    ctx.go_to(0, 0);
+    prin!("{CURSOR_HOME}");
 
     loop {
         let mut key = [0; 1];
@@ -174,13 +85,15 @@ fn main() -> Result<(), anyhow::Error> {
                 if ctx.x == 0 {
                     // prin!("\x1b[K");
                     prin!("\r\n");
-                    prin!("\x1b[1L");
+                    // prin!("\x1b[1L");
                     ctx.content.insert(ctx.y, String::from("\r\n"));
                     ctx.y += 1;
                     print!("{}", ctx.content[ctx.y]);
                 } else {
                     prin!("\x1b[K");
-                    prin!("\r\n");
+                    pub const CLEAR_TO_START: &str = "\x1b[1K"; // Clears from cursor to start of line
+                    prin!("{CLEAR_TO_END}");
+                    prin!("{BREAK_LINE}");
                     prin!("\x1b[1L");
                     let after = ctx.content[ctx.y].split_off(ctx.x);
                     ctx.x = 0;

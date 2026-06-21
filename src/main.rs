@@ -1,211 +1,130 @@
 use std::{
-    env, fs,
+    cmp::min,
+    env,
     io::{Read, stdin},
-    process::Command,
+    process::{Command, exit},
 };
 
-macro_rules! prin {
-    ($($arg:tt)*) => {{
-        print!($($arg)*);
-        std::io::Write::flush(&mut std::io::stdout()).expect("Error on flush prin!");
-    }};
-}
+use ti::{
+    screen::{Cell, Context, Mode, ScreenBuffer},
+    *,
+};
 
-const CLEAR_SCREEN: &str = "\x1b[2J\x1b[H";
+fn generate_diff(front: &ScreenBuffer, back: &ScreenBuffer) -> Vec<(usize, usize, char)> {
+    let mut diff = Vec::new();
 
-#[derive(PartialEq, Clone, Copy)]
-enum Mode {
-    Normal,
-    // VISUAL,
-    Insert,
-}
-
-struct Ctx {
-    mode: Mode,
-    content: Vec<String>,
-    path: String,
-    x: usize,
-    y: usize,
-}
-
-impl Ctx {
-    fn new(path: &str) -> Result<Self, anyhow::Error> {
-        let content = fs::read_to_string(path)?
-            .split("\n")
-            .map(|l| format!("{l}\r\n"))
-            .collect::<Vec<String>>();
-
-        Ok(Self {
-            mode: Mode::Normal,
-            content,
-            path: path.to_owned(),
-            x: 0,
-            y: 0,
-        })
-    }
-
-    fn up(&mut self, n: usize) {
-        if self.y as i32 - n as i32 >= 0 {
-            self.y -= n;
-            prin!("\x1b[{n}A")
+    for i in 0..front.cells.len() {
+        if front.cells[i] != back.cells[i] {
+            let x = i % front.width;
+            let y = i / front.width;
+            diff.push((x, y, back.cells[i].char));
         }
     }
 
-    fn down(&mut self, n: usize) {
-        if self.y + n < self.content.len() {
-            self.y += n;
-            prin!("\x1b[{n}B")
-        }
-    }
-
-    fn right(&mut self, n: usize) {
-        self.x += n;
-        prin!("\x1b[{n}C")
-    }
-
-    fn left(&mut self, n: usize) {
-        if self.x as i32 - n as i32 >= 0 {
-            self.x -= n;
-            prin!("\x1b[{n}D")
-        }
-    }
-
-    fn go_to(&mut self, x: usize, y: usize) {
-        self.x = x;
-        self.y = y;
-        prin!("\x1b[{y};{x}H");
-    }
-
-    fn thin_cursor(&self) {
-        prin!("\x1b[6 q");
-    }
-
-    fn block_cursor(&self) {
-        prin!("\x1b[2 q");
-    }
-
-    fn print_all(&self) {
-        for line in self.content.iter() {
-            prin!("{line}");
-        }
-    }
-
-    fn save(&self) {
-        fs::write(&self.path, self.content.concat().replace("\r", ""))
-            .expect("Failed to write to file");
-    }
+    diff
 }
 
-fn exec_command(ctx: &Ctx) -> Result<bool, anyhow::Error> {
-    let mut result = String::from(":");
+fn generate_patch(diff: Vec<(usize, usize, char)>, context: &Context) -> String {
+    let mut render = String::new();
 
-    loop {
-        let mut key = [0; 1];
-        stdin().read_exact(&mut key)?;
+    render.push_str(HIDE_CURSOR);
 
-        match key[0] as char {
-            '\r' | '\n' => break,
-            c => result.push(c),
-        }
+    for (cx, cy, char) in diff {
+        render.push_str(&format!("\x1b[{};{}H{}", cy + 1, cx + 1, char));
     }
 
-    if result.contains("w") {
-        ctx.save();
-    }
+    render.push_str(&context.cursor.build(Some(context.lines[context.cursor.y])));
 
-    if result.contains("q") {
-        return Ok(true);
-    }
+    render.push_str(SHOW_CURSOR);
 
-    Ok(false)
+    render
 }
 
-fn main() -> Result<(), anyhow::Error> {
+fn process_input(context: &mut Context) -> anyhow::Result<bool> {
+    let mut key = [0; 1];
+    stdin().read_exact(&mut key)?;
+
+    match (context.mode, key[0] as char) {
+        (Mode::Normal, 'q') => return Ok(false),
+        (Mode::Normal, 'h') if context.cursor.x as i32 > 0 => {
+            context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x) - 1;
+        }
+        (Mode::Normal, 'j') if context.cursor.y + 1 < context.lines.len() => context.cursor.y += 1,
+        (Mode::Normal, 'k') if context.cursor.y as i32 > 0 => context.cursor.y -= 1,
+        (Mode::Normal, 'l') if context.cursor.x + 1 < context.lines[context.cursor.y] => {
+            context.cursor.x += 1
+        }
+        (Mode::Normal, 'i') => {
+            context.mode = Mode::Insert;
+            context.cursor.block = false;
+            context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x);
+        }
+        (Mode::Insert, '\x1B') => {
+            context.mode = Mode::Normal;
+            context.cursor.block = true;
+        }
+        (Mode::Insert, '\x08' | '\x7F') => {
+            let idx = context.cursor.y * context.back_buffer.width + context.cursor.x;
+            let end_line = (context.cursor.y + 1) * context.back_buffer.width;
+
+            context
+                .back_buffer
+                .cells
+                .copy_within(idx..(end_line - 1), idx - 1);
+
+            context.back_buffer.cells[end_line] = Cell { char: ' ' };
+            context.cursor.x -= 1;
+        }
+        (Mode::Insert, char) => {
+            let idx = context.cursor.y * context.back_buffer.width + context.cursor.x;
+            let end_line = (context.cursor.y + 1) * context.back_buffer.width;
+
+            context
+                .back_buffer
+                .cells
+                .copy_within(idx..(end_line - 1), idx + 1);
+
+            context.back_buffer.cells[idx] = Cell { char };
+            context.cursor.x += 1;
+        }
+        _ => {}
+    }
+
+    Ok(true)
+}
+
+fn main() -> anyhow::Result<()> {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        panic!("You need to provide the file path!");
+        eprintln!("You need to provide the file path!");
+        exit(1);
     }
 
-    let mut ctx = Ctx::new(&args[1])?;
+    let mut context = Context::new(&args[1]);
 
     Command::new("stty").args(["raw", "-echo"]).status()?;
 
     print!("{CLEAR_SCREEN}");
-    ctx.print_all();
-    ctx.go_to(0, 0);
+    context.front_buffer.print();
+    prin!("{}", context.cursor.build(None));
 
     loop {
-        let mut key = [0; 1];
-        stdin().read_exact(&mut key)?;
-
-        match (ctx.mode, key[0] as char) {
-            (Mode::Normal, 'h') => ctx.left(1),
-            (Mode::Normal, 'j') => ctx.down(1),
-            (Mode::Normal, 'k') => ctx.up(1),
-            (Mode::Normal, 'l') => ctx.right(1),
-            (Mode::Normal, 'i') => {
-                ctx.mode = Mode::Insert;
-                ctx.thin_cursor();
-            }
-            (Mode::Normal, ':') => {
-                if exec_command(&ctx)? {
-                    break;
-                }
-            }
-            (Mode::Insert, '\x1b') => {
-                ctx.mode = Mode::Normal;
-                ctx.block_cursor();
-            }
-            (Mode::Insert, '\x7f') => {
-                if ctx.x as i32 > 0 {
-                    ctx.content[ctx.y].remove(ctx.x);
-                    let rest = &ctx.content[ctx.y][ctx.x..ctx.content[ctx.y].len() - 2];
-                    prin!("\x08");
-                    prin!("\x1b[K");
-                    prin!("{rest}");
-                    let rest_size = rest.chars().count();
-                    if rest_size > 0 {
-                        prin!("\x1b[{}D", rest_size); // Move o cursor 'n' vezes para a esquerda
-                    }
-                    ctx.x -= 1;
-                }
-            }
-            (Mode::Insert, '\n' | '\r') => {
-                if ctx.x == 0 {
-                    // prin!("\x1b[K");
-                    prin!("\r\n");
-                    prin!("\x1b[1L");
-                    ctx.content.insert(ctx.y, String::from("\r\n"));
-                    ctx.y += 1;
-                    print!("{}", ctx.content[ctx.y]);
-                } else {
-                    prin!("\x1b[K");
-                    prin!("\r\n");
-                    prin!("\x1b[1L");
-                    let after = ctx.content[ctx.y].split_off(ctx.x);
-                    ctx.x = 0;
-                    ctx.y += 1;
-                    print!("{after}");
-                    ctx.content.insert(ctx.y, after);
-                    ctx.up(1);
-                    // prin!("\x1b[1S"); // Empurra todo o texto 1 linha para cima
-                    // break line;
-                }
-            }
-            (Mode::Insert, c) => {
-                prin!("\x1b[1@{}", c); // Write aside right letters
-                ctx.content[ctx.y].insert(ctx.x, c);
-                ctx.x += 1;
-            }
-            _ => {}
+        if !process_input(&mut context)? {
+            break;
         }
+
+        let diff = generate_diff(&context.front_buffer, &context.back_buffer);
+
+        let patch = generate_patch(diff, &context);
+
+        context.front_buffer = context.back_buffer.clone();
+
+        prin!("{patch}");
     }
 
-    Command::new("stty").arg("sane").status()?;
     print!("{CLEAR_SCREEN}");
-    ctx.print_all();
+
+    Command::new("stty").arg("sane").status()?;
 
     Ok(())
 }
-
-// prin!("\x1b[1L"); break line

@@ -1,4 +1,3 @@
-pub mod context;
 pub mod screen;
 
 pub const BREAK_LINE: &str = "\r\n";

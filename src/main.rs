@@ -1,11 +1,12 @@
 use std::{
+    cmp::min,
     env,
     io::{Read, stdin},
     process::{Command, exit},
 };
 
 use ti::{
-    screen::{Context, Cursor, ScreenBuffer},
+    screen::{Cell, Context, Mode, ScreenBuffer},
     *,
 };
 
@@ -23,7 +24,7 @@ fn generate_diff(front: &ScreenBuffer, back: &ScreenBuffer) -> Vec<(usize, usize
     diff
 }
 
-fn generate_patch(diff: Vec<(usize, usize, char)>, cursor: &Cursor) -> String {
+fn generate_patch(diff: Vec<(usize, usize, char)>, context: &Context) -> String {
     let mut render = String::new();
 
     render.push_str(HIDE_CURSOR);
@@ -32,7 +33,7 @@ fn generate_patch(diff: Vec<(usize, usize, char)>, cursor: &Cursor) -> String {
         render.push_str(&format!("\x1b[{};{}H{}", cy + 1, cx + 1, char));
     }
 
-    render.push_str(&cursor.build());
+    render.push_str(&context.cursor.build(Some(context.lines[context.cursor.y])));
 
     render.push_str(SHOW_CURSOR);
 
@@ -43,12 +44,49 @@ fn process_input(context: &mut Context) -> anyhow::Result<bool> {
     let mut key = [0; 1];
     stdin().read_exact(&mut key)?;
 
-    match key[0] as char {
-        'q' => return Ok(false),
-        'h' if context.cursor.x as i32 > 0 => context.cursor.x -= 1,
-        'j' => context.cursor.y += 1,
-        'k' if context.cursor.y as i32 > 0 => context.cursor.y -= 1,
-        'l' => context.cursor.x += 1,
+    match (context.mode, key[0] as char) {
+        (Mode::Normal, 'q') => return Ok(false),
+        (Mode::Normal, 'h') if context.cursor.x as i32 > 0 => {
+            context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x) - 1;
+        }
+        (Mode::Normal, 'j') if context.cursor.y + 1 < context.lines.len() => context.cursor.y += 1,
+        (Mode::Normal, 'k') if context.cursor.y as i32 > 0 => context.cursor.y -= 1,
+        (Mode::Normal, 'l') if context.cursor.x + 1 < context.lines[context.cursor.y] => {
+            context.cursor.x += 1
+        }
+        (Mode::Normal, 'i') => {
+            context.mode = Mode::Insert;
+            context.cursor.block = false;
+            context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x);
+        }
+        (Mode::Insert, '\x1B') => {
+            context.mode = Mode::Normal;
+            context.cursor.block = true;
+        }
+        (Mode::Insert, '\x08' | '\x7F') => {
+            let idx = context.cursor.y * context.back_buffer.width + context.cursor.x;
+            let end_line = (context.cursor.y + 1) * context.back_buffer.width;
+
+            context
+                .back_buffer
+                .cells
+                .copy_within(idx..(end_line - 1), idx - 1);
+
+            context.back_buffer.cells[end_line] = Cell { char: ' ' };
+            context.cursor.x -= 1;
+        }
+        (Mode::Insert, char) => {
+            let idx = context.cursor.y * context.back_buffer.width + context.cursor.x;
+            let end_line = (context.cursor.y + 1) * context.back_buffer.width;
+
+            context
+                .back_buffer
+                .cells
+                .copy_within(idx..(end_line - 1), idx + 1);
+
+            context.back_buffer.cells[idx] = Cell { char };
+            context.cursor.x += 1;
+        }
         _ => {}
     }
 
@@ -68,7 +106,7 @@ fn main() -> anyhow::Result<()> {
 
     print!("{CLEAR_SCREEN}");
     context.front_buffer.print();
-    prin!("{}", context.cursor.build());
+    prin!("{}", context.cursor.build(None));
 
     loop {
         if !process_input(&mut context)? {
@@ -77,7 +115,7 @@ fn main() -> anyhow::Result<()> {
 
         let diff = generate_diff(&context.front_buffer, &context.back_buffer);
 
-        let patch = generate_patch(diff, &context.cursor);
+        let patch = generate_patch(diff, &context);
 
         context.front_buffer = context.back_buffer.clone();
 

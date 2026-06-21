@@ -1,5 +1,5 @@
-use super::*;
-use std::{fs, process::exit};
+// use super::*;
+use std::{cmp::min, fs, process::exit};
 
 // pub fn save(&self) {
 //     fs::write(&self.path, self.content.concat().replace("\r", ""))
@@ -34,7 +34,7 @@ fn terminal_size() -> (usize, usize) {
     (size.col as usize, size.row as usize)
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 pub struct Cell {
     pub char: char,
 }
@@ -47,16 +47,32 @@ pub struct ScreenBuffer {
 }
 
 impl ScreenBuffer {
-    pub fn new(path: &str, width: usize, height: usize) -> Self {
-        let mut cells: Vec<Cell> = Vec::with_capacity(width * height);
+    pub fn new(content: &Vec<u8>, width: usize, height: usize) -> Self {
+        let mut cells = vec![Cell { char: ' ' }; width * height];
 
-        cells.extend(
-            fs::read(path)
-                .expect("File not found!")
-                .into_iter()
-                .map(|char| Cell { char: char as char })
-                .collect::<Vec<Cell>>(),
-        );
+        let (mut x, mut y) = (0, 0);
+
+        for c in content.iter() {
+            if y >= height {
+                break;
+            }
+
+            if *c as char == '\n' {
+                y += 1;
+                x = 0;
+                continue;
+            }
+
+            if x >= width {
+                y += 1;
+                x = 0;
+                if y >= height {
+                    break;
+                }
+            }
+            cells[y * width + x] = Cell { char: *c as char };
+            x += 1;
+        }
 
         Self {
             width,
@@ -90,10 +106,16 @@ impl Cursor {
             block: true,
         }
     }
-    pub fn build(&self) -> String {
+    pub fn build(&self, limit: Option<usize>) -> String {
         let mut building = String::new();
 
-        building.push_str(&format!("\x1b[{};{}H", self.y + 1, self.x + 1));
+        let x = if let Some(l) = limit {
+            min(self.x, l)
+        } else {
+            self.x
+        };
+
+        building.push_str(&format!("\x1b[{};{}H", self.y + 1, x + 1));
 
         if self.block {
             building.push_str(&format!("\x1b[2 q"));
@@ -117,18 +139,34 @@ pub struct Context {
     pub back_buffer: ScreenBuffer,
     pub cursor: Cursor,
     pub mode: Mode,
+    pub lines: Vec<usize>,
 }
 
 impl Context {
     pub fn new(path: &str) -> Self {
+        let content = fs::read(path).expect("File not found!");
         let (width, height) = terminal_size();
-        let screen_buffer = ScreenBuffer::new(path, width, height);
+
+        let screen_buffer = ScreenBuffer::new(&content, width, height);
+
+        let mut lines: Vec<usize> = Vec::new();
+        let mut counter = 0;
+        for c in content.iter() {
+            if *c as char != '\n' {
+                counter += 1;
+                continue;
+            }
+
+            lines.push(counter);
+            counter = 0;
+        }
 
         Self {
             front_buffer: screen_buffer.clone(),
             back_buffer: screen_buffer,
             cursor: Cursor::new(),
             mode: Mode::Normal,
+            lines,
         }
     }
 }

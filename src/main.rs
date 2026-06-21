@@ -4,121 +4,89 @@ use std::{
     process::{Command, exit},
 };
 
-use ti::{context::*, *};
+use ti::{
+    screen::{Context, Cursor, ScreenBuffer},
+    *,
+};
 
-fn exec_command(ctx: &Ctx) -> Result<bool, anyhow::Error> {
-    let mut result = String::from(":");
+fn generate_diff(front: &ScreenBuffer, back: &ScreenBuffer) -> Vec<(usize, usize, char)> {
+    let mut diff = Vec::new();
 
-    loop {
-        let mut key = [0; 1];
-        stdin().read_exact(&mut key)?;
-
-        match key[0] as char {
-            '\r' | '\n' => break,
-            c => result.push(c),
+    for i in 0..front.cells.len() {
+        if front.cells[i] != back.cells[i] {
+            let x = i % front.width;
+            let y = i / front.width;
+            diff.push((x, y, back.cells[i].char));
         }
     }
 
-    if result.contains("w") {
-        ctx.save();
-    }
-
-    if result.contains("q") {
-        return Ok(true);
-    }
-
-    Ok(false)
+    diff
 }
 
-fn main() -> Result<(), anyhow::Error> {
+fn generate_patch(diff: Vec<(usize, usize, char)>, cursor: &Cursor) -> String {
+    let mut render = String::new();
+
+    render.push_str(HIDE_CURSOR);
+
+    for (cx, cy, char) in diff {
+        render.push_str(&format!("\x1b[{};{}H{}", cy + 1, cx + 1, char));
+    }
+
+    render.push_str(&cursor.build());
+
+    render.push_str(SHOW_CURSOR);
+
+    render
+}
+
+fn process_input(context: &mut Context) -> anyhow::Result<bool> {
+    let mut key = [0; 1];
+    stdin().read_exact(&mut key)?;
+
+    match key[0] as char {
+        'q' => return Ok(false),
+        'h' if context.cursor.x as i32 > 0 => context.cursor.x -= 1,
+        'j' => context.cursor.y += 1,
+        'k' if context.cursor.y as i32 > 0 => context.cursor.y -= 1,
+        'l' => context.cursor.x += 1,
+        _ => {}
+    }
+
+    Ok(true)
+}
+
+fn main() -> anyhow::Result<()> {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
         eprintln!("You need to provide the file path!");
         exit(1);
     }
 
-    let mut ctx = Ctx::new(&args[1])?;
+    let mut context = Context::new(&args[1]);
 
     Command::new("stty").args(["raw", "-echo"]).status()?;
 
     print!("{CLEAR_SCREEN}");
-    ctx.print_all();
-    prin!("{CURSOR_HOME}");
+    context.front_buffer.print();
+    prin!("{}", context.cursor.build());
 
     loop {
-        let mut key = [0; 1];
-        stdin().read_exact(&mut key)?;
-
-        match (ctx.mode, key[0] as char) {
-            (Mode::Normal, 'h') => ctx.left(1),
-            (Mode::Normal, 'j') => ctx.down(1),
-            (Mode::Normal, 'k') => ctx.up(1),
-            (Mode::Normal, 'l') => ctx.right(1),
-            (Mode::Normal, 'i') => {
-                ctx.mode = Mode::Insert;
-                ctx.thin_cursor();
-            }
-            (Mode::Normal, ':') => {
-                if exec_command(&ctx)? {
-                    break;
-                }
-            }
-            (Mode::Insert, '\x1b') => {
-                ctx.mode = Mode::Normal;
-                ctx.block_cursor();
-            }
-            (Mode::Insert, '\x7f') => {
-                if ctx.x as i32 > 0 {
-                    ctx.content[ctx.y].remove(ctx.x);
-                    let rest = &ctx.content[ctx.y][ctx.x..ctx.content[ctx.y].len() - 2];
-                    prin!("\x08");
-                    prin!("\x1b[K");
-                    prin!("{rest}");
-                    let rest_size = rest.chars().count();
-                    if rest_size > 0 {
-                        prin!("\x1b[{}D", rest_size); // Move o cursor 'n' vezes para a esquerda
-                    }
-                    ctx.x -= 1;
-                }
-            }
-            (Mode::Insert, '\n' | '\r') => {
-                if ctx.x == 0 {
-                    // prin!("\x1b[K");
-                    prin!("\r\n");
-                    // prin!("\x1b[1L");
-                    ctx.content.insert(ctx.y, String::from("\r\n"));
-                    ctx.y += 1;
-                    print!("{}", ctx.content[ctx.y]);
-                } else {
-                    prin!("\x1b[K");
-                    pub const CLEAR_TO_START: &str = "\x1b[1K"; // Clears from cursor to start of line
-                    prin!("{CLEAR_TO_END}");
-                    prin!("{BREAK_LINE}");
-                    prin!("\x1b[1L");
-                    let after = ctx.content[ctx.y].split_off(ctx.x);
-                    ctx.x = 0;
-                    ctx.y += 1;
-                    print!("{after}");
-                    ctx.content.insert(ctx.y, after);
-                    ctx.up(1);
-                    // prin!("\x1b[1S"); // Empurra todo o texto 1 linha para cima
-                    // break line;
-                }
-            }
-            (Mode::Insert, c) => {
-                prin!("\x1b[1@{}", c); // Write aside right letters
-                ctx.content[ctx.y].insert(ctx.x, c);
-                ctx.x += 1;
-            }
-            _ => {}
+        if !process_input(&mut context)? {
+            break;
         }
+
+        let diff = generate_diff(&context.front_buffer, &context.back_buffer);
+
+        let patch = generate_patch(diff, &context.cursor);
+
+        context.front_buffer = context.back_buffer.clone();
+
+        prin!("{patch}");
     }
 
-    Command::new("stty").arg("sane").status()?;
     print!("{CLEAR_SCREEN}");
-    ctx.print_all();
+
+    Command::new("stty").arg("sane").status()?;
 
     Ok(())
 }
-
-// prin!("\x1b[1L"); break line

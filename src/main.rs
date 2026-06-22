@@ -6,7 +6,7 @@ use std::{
 };
 
 use ti::{
-    screen::{Cell, Context, Mode, ScreenBuffer},
+    screen::{Cell, Context, CursorMode, Mode, ScreenBuffer},
     *,
 };
 
@@ -70,12 +70,12 @@ fn process_input(context: &mut Context) -> anyhow::Result<bool> {
         }
         (Mode::Normal, 'i') => {
             context.mode = Mode::Insert;
-            context.cursor.block = false;
+            context.cursor.mode = CursorMode::Bar;
             context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x);
         }
         (Mode::Normal, 'I') => {
             context.mode = Mode::Insert;
-            context.cursor.block = false;
+            context.cursor.mode = CursorMode::Bar;
             context.cursor.x = context.lines[context.cursor.y];
             for (i, c) in context
                 .back_buffer
@@ -224,23 +224,37 @@ fn process_input(context: &mut Context) -> anyhow::Result<bool> {
         }
         (Mode::Normal, 'A') => {
             context.mode = Mode::Insert;
-            context.cursor.block = false;
+            context.cursor.mode = CursorMode::Bar;
             context.cursor.x = context.lines[context.cursor.y];
         }
         (Mode::Normal, 's') => {
             context.mode = Mode::Insert;
-            context.cursor.block = false;
+            context.cursor.mode = CursorMode::Bar;
             context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x) + 1;
             backspace(context, 1);
         }
         (Mode::Normal, 'a') => {
             context.mode = Mode::Insert;
-            context.cursor.block = false;
+            context.cursor.mode = CursorMode::Bar;
             context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x) + 1;
+        }
+        (Mode::Replace, char) => {
+            if !char.is_control() {
+                context.back_buffer.cells
+                    [context.cursor.y * context.back_buffer.width + context.cursor.x] = Cell {
+                    char: key[0] as char,
+                };
+            }
+            context.mode = Mode::Normal;
+            context.cursor.mode = CursorMode::Block;
+        }
+        (Mode::Normal, 'r') => {
+            context.mode = Mode::Replace;
+            context.cursor.mode = CursorMode::Underline;
         }
         (Mode::Insert, '\t') => {
             context.mode = Mode::Normal;
-            context.cursor.block = true;
+            context.cursor.mode = CursorMode::Block;
             context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x);
             if context.cursor.x > 0 {
                 context.cursor.x -= 1;

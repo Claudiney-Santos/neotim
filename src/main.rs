@@ -91,6 +91,137 @@ fn process_input(context: &mut Context) -> anyhow::Result<bool> {
                 }
             }
         }
+        (Mode::Normal, 'w') => {
+            let mut idx = context.cursor.y * context.back_buffer.width + context.cursor.x;
+
+            enum State {
+                Alphabetic,
+                NonAlphabetic,
+                WhiteSpace,
+            }
+
+            let state = match context.back_buffer.cells[idx].char {
+                c if c.is_alphanumeric() => State::Alphabetic,
+                c if c.is_ascii_whitespace() => State::WhiteSpace,
+                _ => State::NonAlphabetic,
+            };
+
+            for (i, c) in context.back_buffer.cells.iter().skip(idx).enumerate() {
+                match (&state, c.char) {
+                    (State::Alphabetic, c) if !c.is_alphanumeric() => {
+                        idx += i;
+                        break;
+                    }
+                    (State::NonAlphabetic, c) if c.is_alphanumeric() || c.is_whitespace() => {
+                        idx += i;
+                        break;
+                    }
+                    (State::WhiteSpace, c) if !c.is_whitespace() => {
+                        idx += i;
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+
+            for (i, c) in context.back_buffer.cells.iter().skip(idx).enumerate() {
+                match c.char {
+                    c if !c.is_whitespace() => {
+                        idx += i;
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+
+            context.cursor.x = idx % context.back_buffer.width;
+            context.cursor.y = idx / context.back_buffer.width;
+        }
+        (Mode::Normal, 'b') => {
+            let mut idx = context.cursor.y * context.back_buffer.width + context.cursor.x;
+
+            enum State {
+                Alphabetic,
+                NonAlphabetic,
+                WhiteSpace,
+            }
+
+            let mut state = match context.back_buffer.cells[idx - 1].char {
+                c if c.is_alphanumeric() => State::Alphabetic,
+                c if c.is_ascii_whitespace() => State::WhiteSpace,
+                _ => State::NonAlphabetic,
+            };
+
+            for (i, c) in context
+                .back_buffer
+                .cells
+                .iter()
+                .take(idx - 1)
+                .rev()
+                .enumerate()
+            {
+                match (&state, c.char) {
+                    (State::Alphabetic, c) if !c.is_alphanumeric() => {
+                        idx -= i + 1;
+                        break;
+                    }
+                    (State::NonAlphabetic, c) if c.is_alphanumeric() || c.is_whitespace() => {
+                        idx -= i + 1;
+                        break;
+                    }
+                    (State::WhiteSpace, c) if !c.is_whitespace() => {
+                        if c.is_alphanumeric() {
+                            state = State::Alphabetic;
+                        } else {
+                            state = State::NonAlphabetic;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            context.cursor.x = idx % context.back_buffer.width;
+            context.cursor.y = idx / context.back_buffer.width;
+        }
+        (Mode::Normal, 'e') => {
+            let mut idx = context.cursor.y * context.back_buffer.width + context.cursor.x;
+
+            enum State {
+                Alphabetic,
+                NonAlphabetic,
+                WhiteSpace,
+            }
+
+            let mut state = match context.back_buffer.cells[idx + 1].char {
+                c if c.is_alphanumeric() => State::Alphabetic,
+                c if c.is_ascii_whitespace() => State::WhiteSpace,
+                _ => State::NonAlphabetic,
+            };
+
+            for (i, c) in context.back_buffer.cells.iter().skip(idx + 1).enumerate() {
+                match (&state, c.char) {
+                    (State::Alphabetic, c) if !c.is_alphanumeric() => {
+                        idx += i;
+                        break;
+                    }
+                    (State::NonAlphabetic, c) if c.is_alphanumeric() || c.is_whitespace() => {
+                        idx += i;
+                        break;
+                    }
+                    (State::WhiteSpace, c) if !c.is_whitespace() => {
+                        if c.is_alphanumeric() {
+                            state = State::Alphabetic;
+                        } else {
+                            state = State::NonAlphabetic;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            context.cursor.x = idx % context.back_buffer.width;
+            context.cursor.y = idx / context.back_buffer.width;
+        }
         (Mode::Normal, 'A') => {
             context.mode = Mode::Insert;
             context.cursor.block = false;

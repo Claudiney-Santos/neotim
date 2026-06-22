@@ -1,4 +1,3 @@
-// use super::*;
 use std::{cmp::min, fs, process::exit};
 
 // pub fn save(&self) {
@@ -92,10 +91,17 @@ impl ScreenBuffer {
     }
 }
 
+#[derive(Copy, Clone)]
+pub enum CursorMode {
+    Block = 2,
+    Underline = 4,
+    Bar = 6,
+}
+
 pub struct Cursor {
     pub x: usize,
     pub y: usize,
-    pub block: bool,
+    pub mode: CursorMode,
 }
 
 impl Cursor {
@@ -103,7 +109,7 @@ impl Cursor {
         Self {
             x: 0,
             y: 0,
-            block: true,
+            mode: CursorMode::Block,
         }
     }
     pub fn build(&self, limit: Option<usize>) -> String {
@@ -117,11 +123,7 @@ impl Cursor {
 
         building.push_str(&format!("\x1b[{};{}H", self.y + 1, x + 1));
 
-        if self.block {
-            building.push_str(&format!("\x1b[2 q"));
-        } else {
-            building.push_str(&format!("\x1b[6 q"));
-        }
+        building.push_str(&format!("\x1b[{} q", self.mode as usize));
 
         building
     }
@@ -130,6 +132,7 @@ impl Cursor {
 #[derive(PartialEq, Clone, Copy)]
 pub enum Mode {
     Normal,
+    Replace,
     // VISUAL,
     Insert,
 }
@@ -137,6 +140,7 @@ pub enum Mode {
 pub struct Context {
     pub front_buffer: ScreenBuffer,
     pub back_buffer: ScreenBuffer,
+    pub file_path: String,
     pub cursor: Cursor,
     pub mode: Mode,
     pub lines: Vec<usize>,
@@ -166,6 +170,7 @@ impl Context {
             back_buffer: screen_buffer,
             cursor: Cursor::new(),
             mode: Mode::Normal,
+            file_path: path.to_owned(),
             lines,
         }
     }

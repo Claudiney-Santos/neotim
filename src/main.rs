@@ -75,6 +75,42 @@ fn process_input(context: &mut Context) -> anyhow::Result<bool> {
             context.back_buffer.cells[end_line] = Cell { char: ' ' };
             context.cursor.x -= 1;
         }
+        (Mode::Insert, '\n' | '\r') if context.lines.len() < context.back_buffer.height - 1 => {
+            let actual_line_idx = context.cursor.y * context.back_buffer.width;
+            let next_line_idx = (context.cursor.y + 1) * context.back_buffer.width;
+            let end_of_buffer = context.back_buffer.width * context.back_buffer.height;
+
+            let idx = context.cursor.x + context.cursor.y * context.back_buffer.width;
+
+            context.back_buffer.cells.copy_within(
+                actual_line_idx..(end_of_buffer - context.back_buffer.width),
+                next_line_idx,
+            );
+
+            for i in idx..next_line_idx {
+                context.back_buffer.cells[i] = Cell { char: ' ' };
+            }
+
+            context.back_buffer.cells.copy_within(
+                (next_line_idx + context.cursor.x)..(next_line_idx + context.back_buffer.width),
+                next_line_idx,
+            );
+
+            for i in (next_line_idx + context.back_buffer.width - context.cursor.x)
+                ..(next_line_idx + context.back_buffer.width)
+            {
+                context.back_buffer.cells[i] = Cell { char: ' ' };
+            }
+
+            context.lines.insert(
+                context.cursor.y + 1,
+                context.lines[context.cursor.y] - context.cursor.x,
+            );
+            context.lines[context.cursor.y] = context.cursor.x;
+
+            context.cursor.x = 0;
+            context.cursor.y += 1;
+        }
         (Mode::Insert, char) => {
             let idx = context.cursor.y * context.back_buffer.width + context.cursor.x;
             let end_line = (context.cursor.y + 1) * context.back_buffer.width;

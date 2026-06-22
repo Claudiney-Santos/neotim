@@ -1,8 +1,7 @@
-laskjfhlasdkjfh
-laskjfhlasdkjfhdf~laskjfhlasdkjfhdf
+# Ti
 
+My toy text editor
 
-
-laskjfhlasdkjfhdf
-laskjfhlasdkjfhdf
-laskjfhlasdkjfhdff
+## Next Steps
+- [X] Implement Enter
+- [ ] Implement basic navigations bindings on normal mode

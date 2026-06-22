@@ -283,6 +283,7 @@ fn process_input(context: &mut Context) -> anyhow::Result<bool> {
             context.cursor.x = 0;
             context.cursor.y += 1;
         }
+        (Mode::Insert, char) if char.is_control() => {}
         (Mode::Insert, char) => {
             let idx = context.cursor.y * context.back_buffer.width + context.cursor.x;
             let end_line = (context.cursor.y + 1) * context.back_buffer.width;

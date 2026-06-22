@@ -40,6 +40,20 @@ fn generate_patch(diff: Vec<(usize, usize, char)>, context: &Context) -> String 
     render
 }
 
+fn backspace(context: &mut Context, times: usize) {
+    let idx = context.cursor.y * context.back_buffer.width + context.cursor.x;
+    let end_line = (context.cursor.y + 1) * context.back_buffer.width;
+
+    context
+        .back_buffer
+        .cells
+        .copy_within(idx..(end_line - 1), idx - times);
+
+    context.back_buffer.cells[end_line - 1] = Cell { char: ' ' };
+    context.lines[context.cursor.y] -= 1;
+    context.cursor.x -= times;
+}
+
 fn process_input(context: &mut Context) -> anyhow::Result<bool> {
     let mut key = [0; 1];
     stdin().read_exact(&mut key)?;
@@ -59,22 +73,23 @@ fn process_input(context: &mut Context) -> anyhow::Result<bool> {
             context.cursor.block = false;
             context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x);
         }
+        (Mode::Normal, 's') => {
+            context.mode = Mode::Insert;
+            context.cursor.block = false;
+            context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x) + 1;
+            backspace(context, 1);
+        }
+        (Mode::Normal, 'a') => {
+            context.mode = Mode::Insert;
+            context.cursor.block = false;
+            context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x) + 1;
+        }
+
         (Mode::Insert, '\x1B') => {
             context.mode = Mode::Normal;
             context.cursor.block = true;
         }
-        (Mode::Insert, '\x08' | '\x7F') => {
-            let idx = context.cursor.y * context.back_buffer.width + context.cursor.x;
-            let end_line = (context.cursor.y + 1) * context.back_buffer.width;
-
-            context
-                .back_buffer
-                .cells
-                .copy_within(idx..(end_line - 1), idx - 1);
-
-            context.back_buffer.cells[end_line] = Cell { char: ' ' };
-            context.cursor.x -= 1;
-        }
+        (Mode::Insert, '\x08' | '\x7F') => backspace(context, 1),
         (Mode::Insert, '\n' | '\r') if context.lines.len() < context.back_buffer.height - 1 => {
             let actual_line_idx = context.cursor.y * context.back_buffer.width;
             let next_line_idx = (context.cursor.y + 1) * context.back_buffer.width;

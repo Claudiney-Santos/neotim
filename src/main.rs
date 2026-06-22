@@ -59,7 +59,7 @@ fn process_input(context: &mut Context) -> anyhow::Result<bool> {
     stdin().read_exact(&mut key)?;
 
     match (context.mode, key[0] as char) {
-        (Mode::Normal, 'q') => return Ok(false),
+        (Mode::Normal, 'Q') => return Ok(false),
         (Mode::Normal, 'h') if context.cursor.x as i32 > 0 => {
             context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x) - 1;
         }
@@ -238,7 +238,7 @@ fn process_input(context: &mut Context) -> anyhow::Result<bool> {
             context.cursor.block = false;
             context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x) + 1;
         }
-        (Mode::Insert, '\x1B') => {
+        (Mode::Insert, '\t') => {
             context.mode = Mode::Normal;
             context.cursor.block = true;
             context.cursor.x = min(context.lines[context.cursor.y] - 1, context.cursor.x - 1);

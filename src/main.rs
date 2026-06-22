@@ -84,10 +84,10 @@ fn process_input(context: &mut Context) -> anyhow::Result<bool> {
             context.cursor.block = false;
             context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x) + 1;
         }
-
         (Mode::Insert, '\x1B') => {
             context.mode = Mode::Normal;
             context.cursor.block = true;
+            context.cursor.x = min(context.lines[context.cursor.y] - 1, context.cursor.x - 1);
         }
         (Mode::Insert, '\x08' | '\x7F') => backspace(context, 1),
         (Mode::Insert, '\n' | '\r') if context.lines.len() < context.back_buffer.height - 1 => {
@@ -136,6 +136,7 @@ fn process_input(context: &mut Context) -> anyhow::Result<bool> {
                 .copy_within(idx..(end_line - 1), idx + 1);
 
             context.back_buffer.cells[idx] = Cell { char };
+            context.lines[context.cursor.y] += 1;
             context.cursor.x += 1;
         }
         _ => {}

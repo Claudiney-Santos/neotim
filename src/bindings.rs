@@ -1,5 +1,6 @@
 use std::{
     cmp::min,
+    fs,
     io::{Read, stdin},
 };
 
@@ -22,6 +23,23 @@ pub fn backspace(context: &mut Context, times: usize) {
 pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
     match (context.mode, key) {
         (Mode::Normal, 'Q') => return Ok(false),
+        (Mode::Normal, 'W') => {
+            let mut content = String::new();
+            let mut i = 0;
+            for line_size in context.lines.iter() {
+                let mut j = 0;
+                for _ in 0..*line_size {
+                    content
+                        .push(context.front_buffer.cells[i * context.front_buffer.width + j].char);
+                    j += 1;
+                }
+                content.push('\n');
+                i += 1;
+            }
+
+            fs::write(&format!("{}.copy", &context.file_path), content.clone())?;
+            fs::write(context.file_path.clone(), content)?;
+        }
         (Mode::Normal, 'h') if context.cursor.x as i32 > 0 => {
             context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x) - 1;
         }

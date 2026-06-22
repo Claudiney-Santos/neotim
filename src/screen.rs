@@ -140,6 +140,7 @@ pub enum Mode {
 pub struct Context {
     pub front_buffer: ScreenBuffer,
     pub back_buffer: ScreenBuffer,
+    pub file_path: String,
     pub cursor: Cursor,
     pub mode: Mode,
     pub lines: Vec<usize>,
@@ -169,6 +170,7 @@ impl Context {
             back_buffer: screen_buffer,
             cursor: Cursor::new(),
             mode: Mode::Normal,
+            file_path: path.to_owned(),
             lines,
         }
     }

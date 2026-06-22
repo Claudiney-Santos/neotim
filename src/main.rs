@@ -73,6 +73,29 @@ fn process_input(context: &mut Context) -> anyhow::Result<bool> {
             context.cursor.block = false;
             context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x);
         }
+        (Mode::Normal, 'I') => {
+            context.mode = Mode::Insert;
+            context.cursor.block = false;
+            context.cursor.x = context.lines[context.cursor.y];
+            for (i, c) in context
+                .back_buffer
+                .cells
+                .iter()
+                .skip(context.cursor.y * context.back_buffer.width)
+                .take(context.lines[context.cursor.y])
+                .enumerate()
+            {
+                if c.char != ' ' {
+                    context.cursor.x = i;
+                    break;
+                }
+            }
+        }
+        (Mode::Normal, 'A') => {
+            context.mode = Mode::Insert;
+            context.cursor.block = false;
+            context.cursor.x = context.lines[context.cursor.y];
+        }
         (Mode::Normal, 's') => {
             context.mode = Mode::Insert;
             context.cursor.block = false;

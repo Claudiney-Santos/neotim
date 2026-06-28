@@ -7,5 +7,7 @@ My toy text editor
 - [X] Implement basic navigations bindings on normal mode
 - [X] Fix backspace on cursor.x = 0
 - [X] Implement dd, dj and dk
-- [ ] Implement o
+- [X] Implement o
 - [ ] Implement visual mode
+- [ ] Implement virtual screen matrix
+- [ ] Implement Undo

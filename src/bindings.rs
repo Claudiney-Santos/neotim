@@ -263,6 +263,25 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             context.cursor.mode = CursorMode::Bar;
             context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x) + 1;
         }
+        (Mode::Normal, 'o') => {
+            context.back_buffer.cells.copy_within(
+                ((context.cursor.y + 1) * context.back_buffer.width)
+                    ..((context.lines.len() + 1) * context.back_buffer.width),
+                (context.cursor.y + 2) * context.back_buffer.width,
+            );
+
+            context.cursor.x = 0;
+            context.cursor.y += 1;
+
+            for i in (context.cursor.y * context.back_buffer.width)
+                ..((context.cursor.y + 1) * context.back_buffer.width)
+            {
+                context.back_buffer.cells[i] = Cell { char: ' ' };
+            }
+
+            context.mode = Mode::Insert;
+            context.cursor.mode = CursorMode::Bar;
+        }
         (Mode::Replace, char) => {
             if !char.is_control() {
                 context.back_buffer.cells

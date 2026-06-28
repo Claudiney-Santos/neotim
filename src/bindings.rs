@@ -6,18 +6,56 @@ use std::{
 
 use super::screen::{Cell, Context, CursorMode, Mode};
 
-pub fn backspace(context: &mut Context, times: usize) {
+pub fn backspace(context: &mut Context) {
+    if context.cursor.x == 0 && context.cursor.y == 0 {
+        return;
+    }
+
     let idx = context.cursor.y * context.back_buffer.width + context.cursor.x;
-    let end_line = (context.cursor.y + 1) * context.back_buffer.width;
+    let end_actual_line = (context.cursor.y + 1) * context.back_buffer.width;
+
+    if context.cursor.x != 0 {
+        context
+            .back_buffer
+            .cells
+            .copy_within(idx..(end_actual_line - 1), idx - 1);
+
+        context.back_buffer.cells[end_actual_line - 1] = Cell { char: ' ' };
+        context.lines[context.cursor.y] -= 1;
+        context.cursor.x -= 1;
+        return;
+    }
+
+    let above_line_idx =
+        (context.cursor.y - 1) * context.back_buffer.width + context.lines[context.cursor.y - 1];
 
     context
         .back_buffer
         .cells
-        .copy_within(idx..(end_line - 1), idx - times);
+        .copy_within(idx..(end_actual_line - 1), above_line_idx);
 
-    context.back_buffer.cells[end_line - 1] = Cell { char: ' ' };
-    context.lines[context.cursor.y] -= 1;
-    context.cursor.x -= times;
+    for i in idx..(idx + context.lines[context.cursor.y]) {
+        context.back_buffer.cells[i] = Cell { char: ' ' };
+    }
+
+    let next_x_cursor = context.lines[context.cursor.y - 1];
+    context.lines[context.cursor.y - 1] += context.lines[context.cursor.y];
+    context.lines.remove(context.cursor.y);
+
+    context.back_buffer.cells.copy_within(
+        ((context.cursor.y + 1) * context.back_buffer.width)
+            ..((context.lines.len() + 1) * context.back_buffer.width),
+        context.cursor.y * context.back_buffer.width,
+    );
+
+    for i in (context.lines.len() * context.back_buffer.width)
+        ..((context.lines.len() + 1) * context.back_buffer.width)
+    {
+        context.back_buffer.cells[i] = Cell { char: ' ' };
+    }
+
+    context.cursor.x = next_x_cursor;
+    context.cursor.y -= 1;
 }
 
 pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
@@ -43,9 +81,16 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         (Mode::Normal, 'h') if context.cursor.x as i32 > 0 => {
             context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x) - 1;
         }
-        (Mode::Normal, 'j') if context.cursor.y + 1 < context.lines.len() => context.cursor.y += 1,
+        (Mode::Normal, 'j')
+            if context.cursor.y + 1 < min(context.lines.len(), context.back_buffer.height) =>
+        {
+            context.cursor.y += 1
+        }
         (Mode::Normal, 'k') if context.cursor.y as i32 > 0 => context.cursor.y -= 1,
-        (Mode::Normal, 'l') if context.cursor.x + 1 < context.lines[context.cursor.y] => {
+        (Mode::Normal, 'l')
+            if context.cursor.x + 1
+                < min(context.lines[context.cursor.y], context.back_buffer.width) =>
+        {
             context.cursor.x += 1
         }
         (Mode::Normal, 'i') => {
@@ -205,13 +250,13 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         (Mode::Normal, 'A') => {
             context.mode = Mode::Insert;
             context.cursor.mode = CursorMode::Bar;
-            context.cursor.x = context.lines[context.cursor.y];
+            context.cursor.x = min(context.lines[context.cursor.y], context.back_buffer.width);
         }
         (Mode::Normal, 's') => {
             context.mode = Mode::Insert;
             context.cursor.mode = CursorMode::Bar;
             context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x) + 1;
-            backspace(context, 1);
+            backspace(context);
         }
         (Mode::Normal, 'a') => {
             context.mode = Mode::Insert;
@@ -251,10 +296,13 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             context.cursor.x = 0;
         }
         (Mode::Normal, 'G') => {
-            context.cursor.y = context.lines.len() - 1;
-            context.cursor.x = context.lines[context.cursor.y] - 1;
+            context.cursor.y = min(context.lines.len() - 1, context.back_buffer.height);
+            context.cursor.x = min(
+                context.lines[context.cursor.y] - 1,
+                context.back_buffer.width,
+            );
         }
-        (Mode::Insert, '\x08' | '\x7F') => backspace(context, 1),
+        (Mode::Insert, '\x08' | '\x7F') => backspace(context),
         (Mode::Insert, '\n' | '\r') if context.lines.len() < context.back_buffer.height - 1 => {
             let actual_line_idx = context.cursor.y * context.back_buffer.width;
             let next_line_idx = (context.cursor.y + 1) * context.back_buffer.width;

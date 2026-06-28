@@ -133,6 +133,7 @@ impl Cursor {
 pub enum Mode {
     Normal,
     Replace,
+    Delete,
     // VISUAL,
     Insert,
 }

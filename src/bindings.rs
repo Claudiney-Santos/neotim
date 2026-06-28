@@ -284,6 +284,98 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
                 context.cursor.x -= 1;
             }
         }
+        (Mode::Delete, 'd') => {
+            for i in context.cursor.y * context.back_buffer.width
+                ..(context.cursor.y * context.back_buffer.width + context.lines[context.cursor.y])
+            {
+                context.back_buffer.cells[i] = Cell { char: ' ' };
+            }
+
+            context.lines.remove(context.cursor.y);
+
+            context.back_buffer.cells.copy_within(
+                ((context.cursor.y + 1) * context.back_buffer.width)
+                    ..((context.lines.len() + 1) * context.back_buffer.width),
+                context.cursor.y * context.back_buffer.width,
+            );
+
+            for i in (context.lines.len() * context.back_buffer.width)
+                ..((context.lines.len() + 1) * context.back_buffer.width)
+            {
+                context.back_buffer.cells[i] = Cell { char: ' ' };
+            }
+
+            context.cursor.x = min(context.cursor.x, context.lines[context.cursor.y]);
+
+            context.mode = Mode::Normal;
+            context.cursor.mode = CursorMode::Block;
+        }
+        (Mode::Delete, 'j') => {
+            for i in context.cursor.y * context.back_buffer.width
+                ..((context.cursor.y + 1) * context.back_buffer.width
+                    + context.lines[context.cursor.y + 1])
+            {
+                context.back_buffer.cells[i] = Cell { char: ' ' };
+            }
+
+            context.lines.remove(context.cursor.y);
+            context.lines.remove(context.cursor.y + 1);
+
+            context.back_buffer.cells.copy_within(
+                ((context.cursor.y + 2) * context.back_buffer.width)
+                    ..((context.lines.len() + 2) * context.back_buffer.width),
+                context.cursor.y * context.back_buffer.width,
+            );
+
+            for i in (context.lines.len() * context.back_buffer.width)
+                ..((context.lines.len() + 2) * context.back_buffer.width)
+            {
+                context.back_buffer.cells[i] = Cell { char: ' ' };
+            }
+
+            context.cursor.x = min(context.cursor.x, context.lines[context.cursor.y]);
+
+            context.mode = Mode::Normal;
+            context.cursor.mode = CursorMode::Block;
+        }
+        (Mode::Delete, 'k') => {
+            for i in context.cursor.y * context.back_buffer.width
+                ..((context.cursor.y - 1) * context.back_buffer.width
+                    + context.lines[context.cursor.y])
+            {
+                context.back_buffer.cells[i] = Cell { char: ' ' };
+            }
+
+            context.lines.remove(context.cursor.y - 1);
+            context.lines.remove(context.cursor.y);
+
+            context.back_buffer.cells.copy_within(
+                ((context.cursor.y + 1) * context.back_buffer.width)
+                    ..((context.lines.len() + 2) * context.back_buffer.width),
+                (context.cursor.y - 1) * context.back_buffer.width,
+            );
+
+            for i in (context.lines.len() * context.back_buffer.width)
+                ..((context.lines.len() + 2) * context.back_buffer.width)
+            {
+                context.back_buffer.cells[i] = Cell { char: ' ' };
+            }
+
+            context.cursor.x = min(context.cursor.x, context.lines[context.cursor.y - 1]);
+            context.cursor.y -= 1;
+
+            context.mode = Mode::Normal;
+            context.cursor.mode = CursorMode::Block;
+        }
+        (Mode::Delete, _) => {
+            context.mode = Mode::Normal;
+            context.cursor.mode = CursorMode::Block;
+        }
+        (Mode::Normal, 'd') => {
+            context.mode = Mode::Delete;
+            context.cursor.mode = CursorMode::Underline;
+        }
+
         (Mode::Normal, 'g') => {
             let mut k = [0; 1];
             stdin().read_exact(&mut k)?;

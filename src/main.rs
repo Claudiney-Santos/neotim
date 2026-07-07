@@ -29,6 +29,11 @@ fn generate_patch(diff: Vec<(usize, usize, char)>, context: &Context) -> String 
     render.push_str(HIDE_CURSOR);
 
     for (cx, cy, char) in diff {
+        if char == '·' {
+            render.push_str(&format!("\x1b[{};{}H\x1b[90m·\x1b[0m", cy + 1, cx + 1));
+            continue;
+        }
+
         render.push_str(&format!("\x1b[{};{}H{}", cy + 1, cx + 1, char));
     }
 

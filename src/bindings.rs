@@ -1,10 +1,48 @@
 use std::{
-    cmp::min,
+    cmp::{max, min},
     fs,
     io::{Read, stdin},
 };
 
 use super::screen::{Cell, Context, CursorMode, Mode};
+
+pub fn move_block(
+    context: &mut Context,
+    line: usize,
+    size: usize,
+    steps: isize,
+) -> Result<(), String> {
+    if (steps < 0 && line as isize + steps < 0)
+        || (steps >= 0 && (line + size) as isize >= context.back_buffer.height as isize - steps)
+    {
+        return Err(String::from("There is no space to do that action"));
+    }
+
+    let start = line * context.back_buffer.width;
+    let end = (line + size) * context.back_buffer.width;
+
+    let dest = max(
+        0,
+        start as isize + (context.back_buffer.width as isize * steps),
+    ) as usize;
+
+    context
+        .back_buffer
+        .cells
+        .copy_within(start..(end - 1), dest);
+
+    if steps < 0 {
+        for i in max(0, end as isize + steps * context.back_buffer.width as isize) as usize..end {
+            context.back_buffer.cells[i] = Cell { char: ' ' };
+        }
+    } else {
+        for i in start..((line + max(0, steps as usize)) * context.back_buffer.width) {
+            context.back_buffer.cells[i] = Cell { char: ' ' };
+        }
+    }
+
+    Ok(())
+}
 
 pub fn backspace(context: &mut Context) {
     if context.cursor.x == 0 && context.cursor.y == 0 {
@@ -97,6 +135,9 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             context.mode = Mode::Insert;
             context.cursor.mode = CursorMode::Bar;
             context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x);
+        }
+        (Mode::Normal, 'J') => {
+            move_block(context, context.cursor.y, 2, 4).unwrap();
         }
         (Mode::Normal, 'I') => {
             context.mode = Mode::Insert;

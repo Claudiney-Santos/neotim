@@ -69,6 +69,13 @@ impl ScreenBuffer {
                     break;
                 }
             }
+
+            if *c as char == ' ' {
+                cells[y * width + x] = Cell { char: '·' };
+                x += 1;
+                continue;
+            }
+
             cells[y * width + x] = Cell { char: *c as char };
             x += 1;
         }
@@ -86,8 +93,38 @@ impl ScreenBuffer {
                 print!("\r");
             }
 
+            if cell.char == '·' {
+                print!("\x1b[90m·\x1b[0m");
+                continue;
+            }
+
             print!("{}", cell.char);
         }
+    }
+
+    pub fn line_size(&self, line: usize) -> usize {
+        let mut counter = 1;
+        for i in self.width * line..self.width * (line + 1) {
+            if self.cells[i].char == ' ' {
+                break;
+            }
+            counter += 1;
+        }
+
+        counter
+    }
+
+    pub fn file_size(&self) -> usize {
+        let mut counter = 1;
+        while counter - 1 < self.height {
+            let line = (counter - 1) * self.width;
+            if self.cells[line].char == ' ' {
+                break;
+            }
+            counter += 1;
+        }
+
+        counter
     }
 }
 

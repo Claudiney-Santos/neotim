@@ -186,32 +186,6 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             context.mode = Mode::Insert;
             context.cursor.x = context.get_min_x();
         }
-        (Mode::Normal, 'J') => {
-            move_block_vertically(context, context.cursor.y, 1, 1).unwrap();
-        }
-        (Mode::Normal, 'K') => {
-            break_line(context, context.cursor.x, context.cursor.y).unwrap();
-        }
-        (Mode::Normal, 'H') => {
-            move_block_horizontally(
-                context,
-                context.cursor.x,
-                context.cursor.y,
-                context.back_buffer.last_char(context.cursor.y) - context.cursor.x,
-                -2,
-            )
-            .unwrap();
-        }
-        (Mode::Normal, 'L') => {
-            move_block_horizontally(
-                context,
-                context.cursor.x,
-                context.cursor.y,
-                context.back_buffer.last_char(context.cursor.y) - context.cursor.x,
-                2,
-            )
-            .unwrap();
-        }
         (Mode::Normal, 'I') => {
             context.mode = Mode::Insert;
             context.cursor.x = 0;

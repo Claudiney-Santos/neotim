@@ -115,16 +115,15 @@ impl ScreenBuffer {
     }
 
     pub fn last_line(&self) -> usize {
-        let mut counter = 0;
-        while counter < self.height {
-            let line = counter * self.width;
-            if self.cells[line].char == ' ' {
+        let mut counter = self.width * self.height - 1;
+        while counter > 0 {
+            if self.cells[counter].char != ' ' {
                 break;
             }
-            counter += 1;
+            counter -= 1;
         }
 
-        counter
+        counter / self.width
     }
 }
 

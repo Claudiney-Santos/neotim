@@ -78,78 +78,87 @@ pub fn move_block_vertically(
     Ok(())
 }
 
-pub fn backspace(context: &mut Context) {
-    if context.cursor.x == 0 && context.cursor.y == 0 {
-        return;
-    }
+pub fn break_line(context: &mut Context, x: usize, y: usize) -> Result<(), String> {
+    move_block_vertically(context, y + 1, context.back_buffer.last_line() - y - 1, 1)?;
 
-    let idx = context.cursor.y * context.back_buffer.width + context.cursor.x;
-    let end_actual_line = (context.cursor.y + 1) * context.back_buffer.width;
-
-    if context.cursor.x != 0 {
-        context
-            .back_buffer
-            .cells
-            .copy_within(idx..(end_actual_line - 1), idx - 1);
-
-        context.back_buffer.cells[end_actual_line - 1] = Cell { char: ' ' };
-        context.lines[context.cursor.y] -= 1;
-        context.cursor.x -= 1;
-        return;
-    }
-
-    let above_line_idx =
-        (context.cursor.y - 1) * context.back_buffer.width + context.lines[context.cursor.y - 1];
+    let start = y * context.back_buffer.width + x;
+    let end = y * context.back_buffer.width + context.back_buffer.last_char(y);
 
     context
         .back_buffer
         .cells
-        .copy_within(idx..(end_actual_line - 1), above_line_idx);
+        .copy_within(start..end, (y + 1) * context.back_buffer.width);
 
-    for i in idx..(idx + context.lines[context.cursor.y]) {
+    for i in start..end {
         context.back_buffer.cells[i] = Cell { char: ' ' };
     }
 
-    let next_x_cursor = context.lines[context.cursor.y - 1];
-    context.lines[context.cursor.y - 1] += context.lines[context.cursor.y];
-    context.lines.remove(context.cursor.y);
+    Ok(())
+}
 
-    context.back_buffer.cells.copy_within(
-        ((context.cursor.y + 1) * context.back_buffer.width)
-            ..((context.lines.len() + 1) * context.back_buffer.width),
-        context.cursor.y * context.back_buffer.width,
-    );
+pub fn backspace(context: &mut Context) -> Result<(), String> {
+    if context.cursor.x == 0 && context.cursor.y == 0 {
+        return Ok(());
+    }
 
-    for i in (context.lines.len() * context.back_buffer.width)
-        ..((context.lines.len() + 1) * context.back_buffer.width)
-    {
+    if context.cursor.x > 0 {
+        move_block_horizontally(
+            context,
+            context.cursor.x,
+            context.cursor.y,
+            context.back_buffer.last_char(context.cursor.y) - context.cursor.x,
+            -1,
+        )?;
+        context.cursor.x -= 1;
+        return Ok(());
+    }
+
+    let start = context.cursor.y * context.back_buffer.width;
+    let end = context.cursor.y * context.back_buffer.width
+        + context.back_buffer.last_char(context.cursor.y);
+
+    let dest = (context.cursor.y - 1) * context.back_buffer.width
+        + context.back_buffer.last_char(context.cursor.y - 1);
+
+    context.back_buffer.cells.copy_within(start..end, dest);
+
+    for i in start..end {
         context.back_buffer.cells[i] = Cell { char: ' ' };
     }
 
-    context.cursor.x = next_x_cursor;
+    move_block_vertically(
+        context,
+        context.cursor.y + 1,
+        context.back_buffer.last_line() - context.cursor.y - 1,
+        -1,
+    )?;
+
+    context.cursor.x = context.back_buffer.last_char(context.cursor.y - 1);
     context.cursor.y -= 1;
+
+    Ok(())
 }
 
 pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
     match (context.mode, key) {
         (Mode::Normal, 'Q') => return Ok(false),
-        (Mode::Normal, 'W') => {
-            let mut content = String::new();
-            let mut i = 0;
-            for line_size in context.lines.iter() {
-                let mut j = 0;
-                for _ in 0..*line_size {
-                    content
-                        .push(context.front_buffer.cells[i * context.front_buffer.width + j].char);
-                    j += 1;
-                }
-                content.push('\n');
-                i += 1;
-            }
-
-            fs::write(&format!("{}.copy", &context.file_path), content.clone())?;
-            fs::write(context.file_path.clone(), content)?;
-        }
+        // (Mode::Normal, 'W') => {
+        //     let mut content = String::new();
+        //     let mut i = 0;
+        //     for line_size in context.lines.iter() {
+        //         let mut j = 0;
+        //         for _ in 0..*line_size {
+        //             content
+        //                 .push(context.front_buffer.cells[i * context.front_buffer.width + j].char);
+        //             j += 1;
+        //         }
+        //         content.push('\n');
+        //         i += 1;
+        //     }
+        //
+        //     fs::write(&format!("{}.copy", &context.file_path), content.clone())?;
+        //     fs::write(context.file_path.clone(), content)?;
+        // }
         (Mode::Normal, 'h') if context.cursor.x as i32 > 0 => {
             context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x) - 1;
         }
@@ -172,6 +181,9 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         }
         (Mode::Normal, 'J') => {
             move_block_vertically(context, context.cursor.y, 1, 1).unwrap();
+        }
+        (Mode::Normal, 'K') => {
+            break_line(context, context.cursor.x, context.cursor.y).unwrap();
         }
         (Mode::Normal, 'H') => {
             move_block_horizontally(
@@ -351,7 +363,7 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             context.mode = Mode::Insert;
             context.cursor.mode = CursorMode::Bar;
             context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x) + 1;
-            backspace(context);
+            backspace(context).unwrap();
         }
         (Mode::Normal, 'a') => {
             context.mode = Mode::Insert;
@@ -508,7 +520,7 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
                 context.back_buffer.width,
             );
         }
-        (Mode::Insert, '\x08' | '\x7F') => backspace(context),
+        (Mode::Insert, '\x08' | '\x7F') => backspace(context).unwrap(),
         (Mode::Insert, '\n' | '\r') if context.lines.len() < context.back_buffer.height - 1 => {
             let actual_line_idx = context.cursor.y * context.back_buffer.width;
             let next_line_idx = (context.cursor.y + 1) * context.back_buffer.width;

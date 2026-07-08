@@ -6,7 +6,41 @@ use std::{
 
 use super::screen::{Cell, Context, CursorMode, Mode};
 
-pub fn move_block(
+pub fn move_block_horizontally(
+    context: &mut Context,
+    x: usize,
+    y: usize,
+    size: usize,
+    steps: isize,
+) -> Result<(), String> {
+    if (steps < 0 && x as isize + steps < 0)
+        && (steps >= 0 && x + size + steps as usize >= context.back_buffer.width)
+    {
+        return Err(String::from("There is no space to do that action"));
+    }
+
+    let start = y * context.back_buffer.width + x;
+    let end = y * context.back_buffer.width + x + size;
+
+    context
+        .back_buffer
+        .cells
+        .copy_within(start..end, max(0, start as isize + steps) as usize);
+
+    if steps >= 0 {
+        for i in start..start + steps as usize {
+            context.back_buffer.cells[i] = Cell { char: '·' };
+        }
+    } else {
+        for i in max(0, end as isize + steps) as usize..end {
+            context.back_buffer.cells[i] = Cell { char: ' ' };
+        }
+    }
+
+    Ok(())
+}
+
+pub fn move_block_vertically(
     context: &mut Context,
     line: usize,
     size: usize,
@@ -137,7 +171,27 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x);
         }
         (Mode::Normal, 'J') => {
-            move_block(context, context.cursor.y, 2, 4).unwrap();
+            move_block_vertically(context, context.cursor.y, 1, 1).unwrap();
+        }
+        (Mode::Normal, 'H') => {
+            move_block_horizontally(
+                context,
+                context.cursor.x,
+                context.cursor.y,
+                context.back_buffer.last_char(context.cursor.y) - context.cursor.x,
+                -2,
+            )
+            .unwrap();
+        }
+        (Mode::Normal, 'L') => {
+            move_block_horizontally(
+                context,
+                context.cursor.x,
+                context.cursor.y,
+                context.back_buffer.last_char(context.cursor.y) - context.cursor.x,
+                2,
+            )
+            .unwrap();
         }
         (Mode::Normal, 'I') => {
             context.mode = Mode::Insert;

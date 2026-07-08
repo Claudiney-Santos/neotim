@@ -127,39 +127,33 @@ impl ScreenBuffer {
     }
 }
 
-#[derive(Copy, Clone)]
-pub enum CursorMode {
-    Block = 2,
-    Underline = 4,
-    Bar = 6,
-}
+const CURSOR_BLOCK: usize = 2;
+const CURSOR_UNDERLINE: usize = 4;
+const CURSOR_BAR: usize = 6;
 
 pub struct Cursor {
     pub x: usize,
     pub y: usize,
-    pub mode: CursorMode,
 }
 
 impl Cursor {
     pub fn new() -> Self {
-        Self {
-            x: 0,
-            y: 0,
-            mode: CursorMode::Block,
-        }
+        Self { x: 0, y: 0 }
     }
-    pub fn build(&self, limit: Option<usize>) -> String {
+
+    pub fn build(&self, mode: Mode) -> String {
         let mut building = String::new();
 
-        let x = if let Some(l) = limit {
-            min(self.x, l)
-        } else {
-            self.x
+        building.push_str(&format!("\x1b[{};{}H", self.y + 1, self.x + 1));
+
+        let mode = match mode {
+            Mode::Normal => CURSOR_BLOCK,
+            Mode::Replace => CURSOR_UNDERLINE,
+            Mode::Delete => CURSOR_UNDERLINE,
+            Mode::Insert => CURSOR_BAR,
         };
 
-        building.push_str(&format!("\x1b[{};{}H", self.y + 1, x + 1));
-
-        building.push_str(&format!("\x1b[{} q", self.mode as usize));
+        building.push_str(&format!("\x1b[{} q", mode));
 
         building
     }

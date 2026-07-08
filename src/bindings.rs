@@ -4,7 +4,7 @@ use std::{
     io::{Read, stdin},
 };
 
-use super::screen::{Cell, Context, CursorMode, Mode};
+use super::screen::{Cell, Context, Mode};
 
 pub fn move_block_horizontally(
     context: &mut Context,
@@ -79,7 +79,7 @@ pub fn move_block_vertically(
 }
 
 pub fn break_line(context: &mut Context, x: usize, y: usize) -> Result<(), String> {
-    move_block_vertically(context, y + 1, context.back_buffer.last_line() - y - 1, 1)?;
+    move_block_vertically(context, y + 1, context.back_buffer.last_line() - y, 1)?;
 
     let start = y * context.back_buffer.width + x;
     let end = y * context.back_buffer.width + context.back_buffer.last_char(y);
@@ -160,24 +160,33 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         //     fs::write(context.file_path.clone(), content)?;
         // }
         (Mode::Normal, 'h') if context.cursor.x as i32 > 0 => {
-            context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x) - 1;
+            context.cursor.x = min(
+                context.back_buffer.last_char(context.cursor.y),
+                context.cursor.x,
+            ) - 1;
         }
         (Mode::Normal, 'j')
-            if context.cursor.y + 1 < min(context.lines.len(), context.back_buffer.height) =>
+            if context.cursor.y + 1
+                < min(context.back_buffer.last_line(), context.back_buffer.height) =>
         {
             context.cursor.y += 1
         }
         (Mode::Normal, 'k') if context.cursor.y as i32 > 0 => context.cursor.y -= 1,
         (Mode::Normal, 'l')
             if context.cursor.x + 1
-                < min(context.lines[context.cursor.y], context.back_buffer.width) =>
+                < min(
+                    context.back_buffer.last_char(context.cursor.y),
+                    context.back_buffer.width,
+                ) =>
         {
             context.cursor.x += 1
         }
         (Mode::Normal, 'i') => {
             context.mode = Mode::Insert;
-            context.cursor.mode = CursorMode::Bar;
-            context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x);
+            context.cursor.x = min(
+                context.back_buffer.last_char(context.cursor.y),
+                context.cursor.x,
+            );
         }
         (Mode::Normal, 'J') => {
             move_block_vertically(context, context.cursor.y, 1, 1).unwrap();
@@ -207,18 +216,14 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         }
         (Mode::Normal, 'I') => {
             context.mode = Mode::Insert;
-            context.cursor.mode = CursorMode::Bar;
-            context.cursor.x = context.lines[context.cursor.y];
-            for (i, c) in context
-                .back_buffer
-                .cells
-                .iter()
-                .skip(context.cursor.y * context.back_buffer.width)
-                .take(context.lines[context.cursor.y])
-                .enumerate()
-            {
-                if c.char != ' ' {
-                    context.cursor.x = i;
+            context.cursor.x = 0;
+
+            let start = context.cursor.y * context.back_buffer.width;
+            let end = start + context.back_buffer.last_char(context.cursor.y);
+
+            for i in start..end {
+                if context.back_buffer.cells[i].char != ' ' {
+                    context.cursor.x = i % context.back_buffer.width;
                     break;
                 }
             }
@@ -356,150 +361,115 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         }
         (Mode::Normal, 'A') => {
             context.mode = Mode::Insert;
-            context.cursor.mode = CursorMode::Bar;
-            context.cursor.x = min(context.lines[context.cursor.y], context.back_buffer.width);
+            context.cursor.x = min(
+                context.back_buffer.last_char(context.cursor.y),
+                context.back_buffer.width,
+            );
         }
         (Mode::Normal, 's') => {
             context.mode = Mode::Insert;
-            context.cursor.mode = CursorMode::Bar;
-            context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x) + 1;
+            context.cursor.x = min(
+                context.back_buffer.last_char(context.cursor.y),
+                context.cursor.x,
+            ) + 1;
             backspace(context).unwrap();
         }
         (Mode::Normal, 'a') => {
             context.mode = Mode::Insert;
-            context.cursor.mode = CursorMode::Bar;
-            context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x) + 1;
+            context.cursor.x = min(
+                context.back_buffer.last_char(context.cursor.y),
+                context.cursor.x,
+            ) + 1;
         }
         (Mode::Normal, 'o') => {
-            context.back_buffer.cells.copy_within(
-                ((context.cursor.y + 1) * context.back_buffer.width)
-                    ..((context.lines.len() + 1) * context.back_buffer.width),
-                (context.cursor.y + 2) * context.back_buffer.width,
-            );
+            move_block_vertically(
+                context,
+                context.cursor.y + 1,
+                context.back_buffer.last_line() - context.cursor.y,
+                1,
+            )
+            .unwrap();
 
             context.cursor.x = 0;
             context.cursor.y += 1;
-
-            for i in (context.cursor.y * context.back_buffer.width)
-                ..((context.cursor.y + 1) * context.back_buffer.width)
-            {
-                context.back_buffer.cells[i] = Cell { char: ' ' };
-            }
-
             context.mode = Mode::Insert;
-            context.cursor.mode = CursorMode::Bar;
         }
         (Mode::Replace, char) => {
+            let i = context.cursor.y * context.back_buffer.width + context.cursor.x;
+
             if !char.is_control() {
-                context.back_buffer.cells
-                    [context.cursor.y * context.back_buffer.width + context.cursor.x] =
-                    Cell { char: key };
+                context.back_buffer.cells[i] = Cell { char: key };
             }
+
             context.mode = Mode::Normal;
-            context.cursor.mode = CursorMode::Block;
         }
         (Mode::Normal, 'r') => {
             context.mode = Mode::Replace;
-            context.cursor.mode = CursorMode::Underline;
         }
-        (Mode::Insert, '\t') => {
+        (Mode::Insert, '\x1b') => {
             context.mode = Mode::Normal;
-            context.cursor.mode = CursorMode::Block;
-            context.cursor.x = min(context.lines[context.cursor.y], context.cursor.x);
+            context.cursor.x = min(
+                context.back_buffer.last_char(context.cursor.y),
+                context.cursor.x,
+            );
             if context.cursor.x > 0 {
                 context.cursor.x -= 1;
             }
         }
         (Mode::Delete, 'd') => {
-            for i in context.cursor.y * context.back_buffer.width
-                ..(context.cursor.y * context.back_buffer.width + context.lines[context.cursor.y])
-            {
-                context.back_buffer.cells[i] = Cell { char: ' ' };
-            }
+            move_block_vertically(
+                context,
+                context.cursor.y + 1,
+                context.back_buffer.last_line() - context.cursor.y,
+                -1,
+            )
+            .unwrap();
 
-            context.lines.remove(context.cursor.y);
-
-            context.back_buffer.cells.copy_within(
-                ((context.cursor.y + 1) * context.back_buffer.width)
-                    ..((context.lines.len() + 1) * context.back_buffer.width),
-                context.cursor.y * context.back_buffer.width,
+            context.cursor.x = min(
+                context.cursor.x,
+                context.back_buffer.last_char(context.cursor.y),
             );
 
-            for i in (context.lines.len() * context.back_buffer.width)
-                ..((context.lines.len() + 1) * context.back_buffer.width)
-            {
-                context.back_buffer.cells[i] = Cell { char: ' ' };
-            }
-
-            context.cursor.x = min(context.cursor.x, context.lines[context.cursor.y]);
-
             context.mode = Mode::Normal;
-            context.cursor.mode = CursorMode::Block;
         }
         (Mode::Delete, 'j') => {
-            for i in context.cursor.y * context.back_buffer.width
-                ..((context.cursor.y + 1) * context.back_buffer.width
-                    + context.lines[context.cursor.y + 1])
-            {
-                context.back_buffer.cells[i] = Cell { char: ' ' };
-            }
+            move_block_vertically(
+                context,
+                context.cursor.y + 2,
+                context.back_buffer.last_line() - context.cursor.y - 1,
+                -2,
+            )
+            .unwrap();
 
-            context.lines.remove(context.cursor.y);
-            context.lines.remove(context.cursor.y + 1);
-
-            context.back_buffer.cells.copy_within(
-                ((context.cursor.y + 2) * context.back_buffer.width)
-                    ..((context.lines.len() + 2) * context.back_buffer.width),
-                context.cursor.y * context.back_buffer.width,
+            context.cursor.x = min(
+                context.cursor.x,
+                context.back_buffer.last_char(context.cursor.y),
             );
-
-            for i in (context.lines.len() * context.back_buffer.width)
-                ..((context.lines.len() + 2) * context.back_buffer.width)
-            {
-                context.back_buffer.cells[i] = Cell { char: ' ' };
-            }
-
-            context.cursor.x = min(context.cursor.x, context.lines[context.cursor.y]);
 
             context.mode = Mode::Normal;
-            context.cursor.mode = CursorMode::Block;
         }
         (Mode::Delete, 'k') => {
-            for i in context.cursor.y * context.back_buffer.width
-                ..((context.cursor.y - 1) * context.back_buffer.width
-                    + context.lines[context.cursor.y])
-            {
-                context.back_buffer.cells[i] = Cell { char: ' ' };
-            }
+            move_block_vertically(
+                context,
+                context.cursor.y + 1,
+                context.back_buffer.last_line() - context.cursor.y - 1,
+                -2,
+            )
+            .unwrap();
 
-            context.lines.remove(context.cursor.y - 1);
-            context.lines.remove(context.cursor.y);
-
-            context.back_buffer.cells.copy_within(
-                ((context.cursor.y + 1) * context.back_buffer.width)
-                    ..((context.lines.len() + 2) * context.back_buffer.width),
-                (context.cursor.y - 1) * context.back_buffer.width,
+            context.cursor.x = min(
+                context.cursor.x,
+                context.back_buffer.last_char(context.cursor.y - 1),
             );
-
-            for i in (context.lines.len() * context.back_buffer.width)
-                ..((context.lines.len() + 2) * context.back_buffer.width)
-            {
-                context.back_buffer.cells[i] = Cell { char: ' ' };
-            }
-
-            context.cursor.x = min(context.cursor.x, context.lines[context.cursor.y - 1]);
             context.cursor.y -= 1;
 
             context.mode = Mode::Normal;
-            context.cursor.mode = CursorMode::Block;
         }
         (Mode::Delete, _) => {
             context.mode = Mode::Normal;
-            context.cursor.mode = CursorMode::Block;
         }
         (Mode::Normal, 'd') => {
             context.mode = Mode::Delete;
-            context.cursor.mode = CursorMode::Underline;
         }
 
         (Mode::Normal, 'g') => {
@@ -514,61 +484,32 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             context.cursor.x = 0;
         }
         (Mode::Normal, 'G') => {
-            context.cursor.y = min(context.lines.len() - 1, context.back_buffer.height);
+            context.cursor.y = min(context.back_buffer.last_line(), context.back_buffer.height);
             context.cursor.x = min(
-                context.lines[context.cursor.y] - 1,
+                context.back_buffer.last_char(context.cursor.y),
                 context.back_buffer.width,
             );
         }
         (Mode::Insert, '\x08' | '\x7F') => backspace(context).unwrap(),
-        (Mode::Insert, '\n' | '\r') if context.lines.len() < context.back_buffer.height - 1 => {
-            let actual_line_idx = context.cursor.y * context.back_buffer.width;
-            let next_line_idx = (context.cursor.y + 1) * context.back_buffer.width;
-            let end_of_buffer = context.back_buffer.width * context.back_buffer.height;
-
-            let idx = context.cursor.x + context.cursor.y * context.back_buffer.width;
-
-            context.back_buffer.cells.copy_within(
-                actual_line_idx..(end_of_buffer - context.back_buffer.width),
-                next_line_idx,
-            );
-
-            for i in idx..next_line_idx {
-                context.back_buffer.cells[i] = Cell { char: ' ' };
-            }
-
-            context.back_buffer.cells.copy_within(
-                (next_line_idx + context.cursor.x)..(next_line_idx + context.back_buffer.width),
-                next_line_idx,
-            );
-
-            for i in (next_line_idx + context.back_buffer.width - context.cursor.x)
-                ..(next_line_idx + context.back_buffer.width)
-            {
-                context.back_buffer.cells[i] = Cell { char: ' ' };
-            }
-
-            context.lines.insert(
-                context.cursor.y + 1,
-                context.lines[context.cursor.y] - context.cursor.x,
-            );
-            context.lines[context.cursor.y] = context.cursor.x;
-
+        (Mode::Insert, '\n' | '\r') => {
+            break_line(context, context.cursor.x, context.cursor.y).unwrap();
             context.cursor.x = 0;
             context.cursor.y += 1;
         }
         (Mode::Insert, char) if char.is_control() => {}
         (Mode::Insert, char) => {
-            let idx = context.cursor.y * context.back_buffer.width + context.cursor.x;
-            let end_line = (context.cursor.y + 1) * context.back_buffer.width;
+            move_block_horizontally(
+                context,
+                context.cursor.x,
+                context.cursor.y,
+                context.back_buffer.last_char(context.cursor.y) - context.cursor.x,
+                1,
+            )
+            .unwrap();
 
-            context
-                .back_buffer
-                .cells
-                .copy_within(idx..(end_line - 1), idx + 1);
+            let idx = context.cursor.y * context.back_buffer.width + context.cursor.x;
 
             context.back_buffer.cells[idx] = Cell { char };
-            context.lines[context.cursor.y] += 1;
             context.cursor.x += 1;
         }
         _ => {}

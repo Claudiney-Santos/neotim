@@ -29,10 +29,15 @@ fn generate_patch(diff: Vec<(usize, usize, char)>, context: &Context) -> String 
     render.push_str(HIDE_CURSOR);
 
     for (cx, cy, char) in diff {
+        if char == '·' {
+            render.push_str(&format!("\x1b[{};{}H\x1b[90m·\x1b[0m", cy + 1, cx + 1));
+            continue;
+        }
+
         render.push_str(&format!("\x1b[{};{}H{}", cy + 1, cx + 1, char));
     }
 
-    render.push_str(&context.cursor.build(Some(context.lines[context.cursor.y])));
+    render.push_str(&context.cursor.build(context.mode));
 
     render.push_str(SHOW_CURSOR);
 
@@ -52,7 +57,7 @@ fn main() -> anyhow::Result<()> {
 
     print!("{CLEAR_SCREEN}");
     context.front_buffer.print();
-    prin!("{}", context.cursor.build(None));
+    prin!("{}", context.cursor.build(context.mode));
 
     while process_input(&mut context)? {
         let diff = generate_diff(&context.front_buffer, &context.back_buffer);

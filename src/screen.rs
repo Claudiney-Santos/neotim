@@ -1,10 +1,5 @@
 use std::{cmp::min, fs, process::exit};
 
-// pub fn save(&self) {
-//     fs::write(&self.path, self.content.concat().replace("\r", ""))
-//         .expect("Failed to write to file");
-// }
-
 #[repr(C)]
 struct WinSize {
     row: u16,
@@ -69,6 +64,13 @@ impl ScreenBuffer {
                     break;
                 }
             }
+
+            if *c as char == ' ' {
+                cells[y * width + x] = Cell { char: '·' };
+                x += 1;
+                continue;
+            }
+
             cells[y * width + x] = Cell { char: *c as char };
             x += 1;
         }
@@ -86,44 +88,67 @@ impl ScreenBuffer {
                 print!("\r");
             }
 
+            if cell.char == '·' {
+                print!("\x1b[90m·\x1b[0m");
+                continue;
+            }
+
             print!("{}", cell.char);
         }
     }
+
+    pub fn last_char(&self, line: usize) -> usize {
+        let mut counter = 0;
+        for i in self.width * line..self.width * (line + 1) {
+            if self.cells[i].char == ' ' {
+                break;
+            }
+            counter += 1;
+        }
+
+        counter
+    }
+
+    pub fn last_line(&self) -> usize {
+        let mut counter = self.width * self.height - 1;
+        while counter > 0 {
+            if self.cells[counter].char != ' ' {
+                break;
+            }
+            counter -= 1;
+        }
+
+        counter / self.width
+    }
 }
 
-#[derive(Copy, Clone)]
-pub enum CursorMode {
-    Block = 2,
-    Underline = 4,
-    Bar = 6,
-}
+const CURSOR_BLOCK: usize = 2;
+const CURSOR_UNDERLINE: usize = 4;
+const CURSOR_BAR: usize = 6;
 
 pub struct Cursor {
     pub x: usize,
     pub y: usize,
-    pub mode: CursorMode,
 }
 
 impl Cursor {
     pub fn new() -> Self {
-        Self {
-            x: 0,
-            y: 0,
-            mode: CursorMode::Block,
-        }
+        Self { x: 0, y: 0 }
     }
-    pub fn build(&self, limit: Option<usize>) -> String {
+
+    pub fn build(&self, mode: Mode) -> String {
         let mut building = String::new();
 
-        let x = if let Some(l) = limit {
-            min(self.x, l)
-        } else {
-            self.x
+        building.push_str(&format!("\x1b[{};{}H", self.y + 1, self.x + 1));
+
+        let mode = match mode {
+            Mode::Normal => CURSOR_BLOCK,
+            Mode::Replace => CURSOR_UNDERLINE,
+            Mode::Delete => CURSOR_UNDERLINE,
+            Mode::Insert => CURSOR_BAR,
         };
 
-        building.push_str(&format!("\x1b[{};{}H", self.y + 1, x + 1));
-
-        building.push_str(&format!("\x1b[{} q", self.mode as usize));
+        building.push_str(&format!("\x1b[{} q", mode));
 
         building
     }
@@ -134,7 +159,6 @@ pub enum Mode {
     Normal,
     Replace,
     Delete,
-    // VISUAL,
     Insert,
 }
 
@@ -144,7 +168,6 @@ pub struct Context {
     pub file_path: String,
     pub cursor: Cursor,
     pub mode: Mode,
-    pub lines: Vec<usize>,
 }
 
 impl Context {
@@ -154,25 +177,20 @@ impl Context {
 
         let screen_buffer = ScreenBuffer::new(&content, width, height);
 
-        let mut lines: Vec<usize> = Vec::new();
-        let mut counter = 0;
-        for c in content.iter() {
-            if *c as char != '\n' {
-                counter += 1;
-                continue;
-            }
-
-            lines.push(counter);
-            counter = 0;
-        }
-
         Self {
             front_buffer: screen_buffer.clone(),
             back_buffer: screen_buffer,
             cursor: Cursor::new(),
             mode: Mode::Normal,
             file_path: path.to_owned(),
-            lines,
         }
+    }
+
+    pub fn get_min_x(&self) -> usize {
+        min(self.back_buffer.last_char(self.cursor.y), self.cursor.x)
+    }
+
+    pub fn get_min_y(&self) -> usize {
+        min(self.back_buffer.last_line(), self.back_buffer.height)
     }
 }

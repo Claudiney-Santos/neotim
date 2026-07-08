@@ -1,10 +1,5 @@
 use std::{cmp::min, fs, process::exit};
 
-// pub fn save(&self) {
-//     fs::write(&self.path, self.content.concat().replace("\r", ""))
-//         .expect("Failed to write to file");
-// }
-
 #[repr(C)]
 struct WinSize {
     row: u16,
@@ -164,7 +159,6 @@ pub enum Mode {
     Normal,
     Replace,
     Delete,
-    // VISUAL,
     Insert,
 }
 
@@ -174,7 +168,6 @@ pub struct Context {
     pub file_path: String,
     pub cursor: Cursor,
     pub mode: Mode,
-    pub lines: Vec<usize>,
 }
 
 impl Context {
@@ -184,25 +177,20 @@ impl Context {
 
         let screen_buffer = ScreenBuffer::new(&content, width, height);
 
-        let mut lines: Vec<usize> = Vec::new();
-        let mut counter = 0;
-        for c in content.iter() {
-            if *c as char != '\n' {
-                counter += 1;
-                continue;
-            }
-
-            lines.push(counter);
-            counter = 0;
-        }
-
         Self {
             front_buffer: screen_buffer.clone(),
             back_buffer: screen_buffer,
             cursor: Cursor::new(),
             mode: Mode::Normal,
             file_path: path.to_owned(),
-            lines,
         }
+    }
+
+    pub fn get_min_x(&self) -> usize {
+        min(self.back_buffer.last_char(self.cursor.y), self.cursor.x)
+    }
+
+    pub fn get_min_y(&self) -> usize {
+        min(self.back_buffer.last_line(), self.back_buffer.height)
     }
 }

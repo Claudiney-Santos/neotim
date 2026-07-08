@@ -142,28 +142,29 @@ pub fn backspace(context: &mut Context) -> Result<(), String> {
 pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
     match (context.mode, key) {
         (Mode::Normal, 'Q') => return Ok(false),
-        // (Mode::Normal, 'W') => {
-        //     let mut content = String::new();
-        //     let mut i = 0;
-        //     for line_size in context.lines.iter() {
-        //         let mut j = 0;
-        //         for _ in 0..*line_size {
-        //             content
-        //                 .push(context.front_buffer.cells[i * context.front_buffer.width + j].char);
-        //             j += 1;
-        //         }
-        //         content.push('\n');
-        //         i += 1;
-        //     }
-        //
-        //     fs::write(&format!("{}.copy", &context.file_path), content.clone())?;
-        //     fs::write(context.file_path.clone(), content)?;
-        // }
+        (Mode::Normal, 'W') => {
+            let mut content = String::new();
+            let mut i = 0;
+            while i < context.front_buffer.width * context.front_buffer.height {
+                if context.front_buffer.cells[i].char == ' ' {
+                    i += context.front_buffer.width - i % context.front_buffer.width;
+                    content.push('\n');
+                    continue;
+                }
+
+                if context.front_buffer.cells[i].char == '·' {
+                    context.front_buffer.cells[i].char = ' ';
+                }
+
+                content.push(context.front_buffer.cells[i].char);
+                i += 1;
+            }
+
+            fs::write(&format!("{}.copy", &context.file_path), content.clone())?;
+            fs::write(context.file_path.clone(), content)?;
+        }
         (Mode::Normal, 'h') if context.cursor.x as i32 > 0 => {
-            context.cursor.x = min(
-                context.back_buffer.last_char(context.cursor.y),
-                context.cursor.x,
-            ) - 1;
+            context.cursor.x = context.get_min_x() - 1;
         }
         (Mode::Normal, 'j')
             if context.cursor.y + 1
@@ -183,10 +184,7 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         }
         (Mode::Normal, 'i') => {
             context.mode = Mode::Insert;
-            context.cursor.x = min(
-                context.back_buffer.last_char(context.cursor.y),
-                context.cursor.x,
-            );
+            context.cursor.x = context.get_min_x();
         }
         (Mode::Normal, 'J') => {
             move_block_vertically(context, context.cursor.y, 1, 1).unwrap();
@@ -361,25 +359,16 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         }
         (Mode::Normal, 'A') => {
             context.mode = Mode::Insert;
-            context.cursor.x = min(
-                context.back_buffer.last_char(context.cursor.y),
-                context.back_buffer.width,
-            );
+            context.cursor.x = context.get_min_x();
         }
         (Mode::Normal, 's') => {
             context.mode = Mode::Insert;
-            context.cursor.x = min(
-                context.back_buffer.last_char(context.cursor.y),
-                context.cursor.x,
-            ) + 1;
+            context.cursor.x = context.get_min_x() + 1;
             backspace(context).unwrap();
         }
         (Mode::Normal, 'a') => {
             context.mode = Mode::Insert;
-            context.cursor.x = min(
-                context.back_buffer.last_char(context.cursor.y),
-                context.cursor.x,
-            ) + 1;
+            context.cursor.x = context.get_min_x() + 1;
         }
         (Mode::Normal, 'o') => {
             move_block_vertically(
@@ -408,10 +397,7 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         }
         (Mode::Insert, '\x1b') => {
             context.mode = Mode::Normal;
-            context.cursor.x = min(
-                context.back_buffer.last_char(context.cursor.y),
-                context.cursor.x,
-            );
+            context.cursor.x = context.get_min_x();
             if context.cursor.x > 0 {
                 context.cursor.x -= 1;
             }
@@ -425,11 +411,7 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             )
             .unwrap();
 
-            context.cursor.x = min(
-                context.cursor.x,
-                context.back_buffer.last_char(context.cursor.y),
-            );
-
+            context.cursor.x = context.get_min_x();
             context.mode = Mode::Normal;
         }
         (Mode::Delete, 'j') => {
@@ -441,11 +423,7 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             )
             .unwrap();
 
-            context.cursor.x = min(
-                context.cursor.x,
-                context.back_buffer.last_char(context.cursor.y),
-            );
-
+            context.cursor.x = context.get_min_x();
             context.mode = Mode::Normal;
         }
         (Mode::Delete, 'k') => {
@@ -457,12 +435,8 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             )
             .unwrap();
 
-            context.cursor.x = min(
-                context.cursor.x,
-                context.back_buffer.last_char(context.cursor.y - 1),
-            );
             context.cursor.y -= 1;
-
+            context.cursor.x = context.get_min_x();
             context.mode = Mode::Normal;
         }
         (Mode::Delete, _) => {
@@ -471,7 +445,6 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         (Mode::Normal, 'd') => {
             context.mode = Mode::Delete;
         }
-
         (Mode::Normal, 'g') => {
             let mut k = [0; 1];
             stdin().read_exact(&mut k)?;
@@ -484,11 +457,8 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             context.cursor.x = 0;
         }
         (Mode::Normal, 'G') => {
-            context.cursor.y = min(context.back_buffer.last_line(), context.back_buffer.height);
-            context.cursor.x = min(
-                context.back_buffer.last_char(context.cursor.y),
-                context.back_buffer.width,
-            );
+            context.cursor.y = context.get_min_y();
+            context.cursor.x = context.get_min_x();
         }
         (Mode::Insert, '\x08' | '\x7F') => backspace(context).unwrap(),
         (Mode::Insert, '\n' | '\r') => {

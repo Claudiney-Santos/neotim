@@ -1,6 +1,6 @@
 # Ti
 
-My toy text editor
+Toy text editor
 
 ## Next Steps
 - [X] Implement Enter
@@ -8,6 +8,7 @@ My toy text editor
 - [X] Fix backspace on cursor.x = 0
 - [X] Implement dd, dj and dk
 - [X] Implement o
+- [X] Refactor Code
+- [ ] Implement Undo
 - [ ] Implement visual mode
 - [ ] Implement virtual screen matrix
-- [ ] Implement Undo

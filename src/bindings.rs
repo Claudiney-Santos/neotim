@@ -160,7 +160,7 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
                 i += 1;
             }
 
-            fs::write(&format!("{}.copy", &context.file_path), content.clone())?;
+            // fs::write(&format!("{}.copy", &context.file_path), content.clone())?;
             fs::write(context.file_path.clone(), content)?;
         }
         (Mode::Normal, 'h') if context.cursor.x as i32 > 0 => {
@@ -333,7 +333,7 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         }
         (Mode::Normal, 'A') => {
             context.mode = Mode::Insert;
-            context.cursor.x = context.get_min_x();
+            context.cursor.x = context.back_buffer.last_char(context.cursor.y);
         }
         (Mode::Normal, 's') => {
             context.mode = Mode::Insert;

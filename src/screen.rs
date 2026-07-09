@@ -1,4 +1,8 @@
-use std::{cmp::min, fs, process::exit};
+use std::{
+    cmp::{max, min},
+    fs,
+    process::exit,
+};
 
 #[repr(C)]
 struct WinSize {
@@ -106,7 +110,7 @@ impl ScreenBuffer {
             counter += 1;
         }
 
-        counter
+        max(counter as isize - 1, 0) as usize
     }
 
     pub fn last_line(&self) -> usize {
@@ -129,20 +133,28 @@ const CURSOR_BAR: usize = 6;
 pub struct Cursor {
     pub x: usize,
     pub y: usize,
+    pub last_x: usize,
+    pub last_y: usize,
 }
 
 impl Cursor {
     pub fn new() -> Self {
-        Self { x: 0, y: 0 }
+        Self {
+            x: 0,
+            y: 0,
+            last_x: 0,
+            last_y: 0,
+        }
     }
 
-    pub fn build(&self, mode: Mode) -> String {
+    pub fn build(&self, virtual_x: usize, mode: Mode) -> String {
         let mut building = String::new();
 
-        building.push_str(&format!("\x1b[{};{}H", self.y + 1, self.x + 1));
+        building.push_str(&format!("\x1b[{};{}H", self.y + 1, virtual_x + 1));
 
         let mode = match mode {
             Mode::Normal => CURSOR_BLOCK,
+            Mode::Undo => CURSOR_BLOCK,
             Mode::Replace => CURSOR_UNDERLINE,
             Mode::Delete => CURSOR_UNDERLINE,
             Mode::Insert => CURSOR_BAR,
@@ -160,6 +172,7 @@ pub enum Mode {
     Replace,
     Delete,
     Insert,
+    Undo,
 }
 
 pub struct Context {
@@ -168,6 +181,7 @@ pub struct Context {
     pub file_path: String,
     pub cursor: Cursor,
     pub mode: Mode,
+    pub undo_list: Vec<(usize, usize, Vec<(usize, usize, char)>)>,
 }
 
 impl Context {
@@ -183,6 +197,7 @@ impl Context {
             cursor: Cursor::new(),
             mode: Mode::Normal,
             file_path: path.to_owned(),
+            undo_list: vec![],
         }
     }
 

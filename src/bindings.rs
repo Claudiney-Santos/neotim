@@ -168,14 +168,14 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         }
         (Mode::Normal, 'j')
             if context.cursor.y + 1
-                < min(context.back_buffer.last_line(), context.back_buffer.height) =>
+                <= min(context.back_buffer.last_line(), context.back_buffer.height) =>
         {
             context.cursor.y += 1
         }
         (Mode::Normal, 'k') if context.cursor.y as i32 > 0 => context.cursor.y -= 1,
         (Mode::Normal, 'l')
             if context.cursor.x + 1
-                < min(
+                <= min(
                     context.back_buffer.last_char(context.cursor.y),
                     context.back_buffer.width,
                 ) =>
@@ -185,6 +185,19 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         (Mode::Normal, 'i') => {
             context.mode = Mode::Insert;
             context.cursor.x = context.get_min_x();
+        }
+        (Mode::Normal, 'u') => {
+            if let Some(undo) = context.undo_list.pop() {
+                for u in undo.2.iter() {
+                    let idx = u.1 * context.back_buffer.width + u.0;
+                    context.back_buffer.cells[idx].char = u.2;
+                }
+
+                context.cursor.x = undo.0;
+                context.cursor.y = undo.1;
+            }
+
+            context.mode = Mode::Undo;
         }
         (Mode::Normal, 'I') => {
             context.mode = Mode::Insert;
@@ -333,7 +346,7 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         }
         (Mode::Normal, 'A') => {
             context.mode = Mode::Insert;
-            context.cursor.x = context.back_buffer.last_char(context.cursor.y);
+            context.cursor.x = context.back_buffer.last_char(context.cursor.y) + 1;
         }
         (Mode::Normal, 's') => {
             context.mode = Mode::Insert;
@@ -345,13 +358,15 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             context.cursor.x = context.get_min_x() + 1;
         }
         (Mode::Normal, 'o') => {
-            move_block_vertically(
-                context,
-                context.cursor.y + 1,
-                context.back_buffer.last_line() - context.cursor.y,
-                1,
-            )
-            .unwrap();
+            if context.cursor.y < context.back_buffer.last_line() {
+                move_block_vertically(
+                    context,
+                    context.cursor.y + 1,
+                    context.back_buffer.last_line() - context.cursor.y,
+                    1,
+                )
+                .unwrap();
+            }
 
             context.cursor.x = 0;
             context.cursor.y += 1;
@@ -371,10 +386,8 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         }
         (Mode::Insert, '\x1b') => {
             context.mode = Mode::Normal;
+            context.cursor.x = max(0, context.cursor.x as isize - 1) as usize;
             context.cursor.x = context.get_min_x();
-            if context.cursor.x > 0 {
-                context.cursor.x -= 1;
-            }
         }
         (Mode::Delete, 'd') => {
             move_block_vertically(
@@ -441,17 +454,21 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             context.cursor.y += 1;
         }
         (Mode::Insert, char) if char.is_control() => {}
-        (Mode::Insert, char) => {
+        (Mode::Insert, mut char) => {
             move_block_horizontally(
                 context,
                 context.cursor.x,
                 context.cursor.y,
-                context.back_buffer.last_char(context.cursor.y) - context.cursor.x,
+                context.back_buffer.last_char(context.cursor.y) + 1 - context.cursor.x,
                 1,
             )
             .unwrap();
 
             let idx = context.cursor.y * context.back_buffer.width + context.cursor.x;
+
+            if char == ' ' {
+                char = '·'
+            }
 
             context.back_buffer.cells[idx] = Cell { char };
             context.cursor.x += 1;

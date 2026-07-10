@@ -1,14 +1,10 @@
 use crate::{
-    file,
+    BACKSPACE, ENTER, ESC, file,
     screen::{
         Cell, Context, Mode, backspace, break_line, move_block_horizontally, move_block_vertically,
     },
 };
 use std::io::{Read, stdin};
-
-const BACKSPACE: char = '\x7F';
-const ENTER: char = '\r';
-const ESC: char = '\x1b';
 
 pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
     let Context {

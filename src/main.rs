@@ -1,4 +1,4 @@
-use std::{env, process::Command};
+use std::process::Command;
 use ti::{bindings::*, screen::Context, *};
 
 pub fn generate_patch(diff: Vec<(usize, usize, char)>) -> String {

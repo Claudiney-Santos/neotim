@@ -42,6 +42,7 @@ pub struct ScreenBuffer {
     pub width: usize,
     pub height: usize,
     pub cells: Vec<Cell>,
+    pub line_count: usize,
 }
 
 impl ScreenBuffer {
@@ -52,11 +53,13 @@ impl ScreenBuffer {
             width,
             height,
             cells,
+            line_count: 0,
         }
     }
 
     pub fn from(content: &Vec<u8>, width: usize, height: usize) -> Self {
         let mut cells = vec![Cell { char: ' ' }; width * height];
+        let mut line_count = 0;
 
         let (mut x, mut y) = (0, 0);
 
@@ -68,6 +71,7 @@ impl ScreenBuffer {
             if *c as char == '\n' {
                 y += 1;
                 x = 0;
+                line_count += 1;
                 continue;
             }
 
@@ -93,6 +97,7 @@ impl ScreenBuffer {
             width,
             height,
             cells,
+            line_count,
         }
     }
 
@@ -122,30 +127,6 @@ impl ScreenBuffer {
 
         counter
     }
-
-    pub fn last_char(&self, line: usize) -> usize {
-        let mut counter = 0;
-        for i in self.width * line..self.width * (line + 1) {
-            if self.cells[i].char == ' ' {
-                break;
-            }
-            counter += 1;
-        }
-
-        max(counter as isize - 1, 0) as usize
-    }
-
-    pub fn last_line(&self) -> usize {
-        let mut counter = self.width * self.height - 1;
-        while counter > 0 {
-            if self.cells[counter].char != ' ' {
-                break;
-            }
-            counter -= 1;
-        }
-
-        counter / self.width
-    }
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -158,7 +139,7 @@ pub enum Mode {
 }
 
 pub struct Context {
-    pub front_buffer: ScreenBuffer,
+    pub front_buffer: Vec<Cell>,
     pub back_buffer: ScreenBuffer,
     pub file_path: String,
     pub cursor: Cursor,
@@ -176,7 +157,7 @@ impl Context {
         let (width, height) = terminal_size();
 
         Ok(Self {
-            front_buffer: ScreenBuffer::new(width, height),
+            front_buffer: vec![Cell { char: ' ' }; width * height],
             back_buffer: ScreenBuffer::from(&content, width, height),
             cursor: Cursor::new(),
             prev_cursor: Cursor::new(),
@@ -190,12 +171,12 @@ impl Context {
         let mut diff = Vec::new();
         let mut undo = Vec::new();
 
-        for i in 0..self.front_buffer.cells.len() {
-            if self.front_buffer.cells[i] != self.back_buffer.cells[i] {
-                let x = i % self.front_buffer.width;
-                let y = i / self.front_buffer.width;
+        for i in 0..self.front_buffer.len() {
+            if self.front_buffer[i] != self.back_buffer.cells[i] {
+                let x = i % self.back_buffer.width;
+                let y = i / self.back_buffer.width;
                 diff.push((x, y, self.back_buffer.cells[i].char));
-                undo.push((x, y, self.front_buffer.cells[i].char));
+                undo.push((x, y, self.front_buffer[i].char));
             }
         }
 
@@ -207,7 +188,7 @@ impl Context {
             self.mode = Mode::Normal
         }
 
-        self.front_buffer = self.back_buffer.clone();
+        self.front_buffer = self.back_buffer.cells.clone();
         self.prev_cursor = self.cursor;
 
         diff
@@ -270,10 +251,12 @@ pub fn move_block_vertically(
         for i in max(0, end as isize + steps * screen.width as isize) as usize..end {
             screen.cells[i] = Cell { char: ' ' };
         }
+        screen.line_count -= steps.abs() as usize;
     } else {
         for i in start..((line + max(0, steps as usize)) * screen.width) {
             screen.cells[i] = Cell { char: ' ' };
         }
+        screen.line_count += steps as usize;
     }
 
     Ok(())
@@ -310,20 +293,15 @@ pub fn backspace(screen: &mut ScreenBuffer, cursor: &mut Cursor) -> TiResult<()>
         screen.cells[i] = Cell { char: ' ' };
     }
 
-    if cursor.y < screen.last_line() {
-        move_block_vertically(
-            screen,
-            cursor.y + 2,
-            screen.last_line() - (cursor.y + 1),
-            -1,
-        )?;
+    if cursor.y < screen.line_count {
+        move_block_vertically(screen, cursor.y + 2, screen.line_count - (cursor.y + 1), -1)?;
     }
 
     Ok(())
 }
 pub fn break_line(screen: &mut ScreenBuffer, x: usize, y: usize) -> TiResult<()> {
-    if y < screen.last_line() {
-        move_block_vertically(screen, y + 1, screen.last_line() - y, 1)?;
+    if y < screen.line_count {
+        move_block_vertically(screen, y + 1, screen.line_count - y, 1)?;
     }
 
     let start = y * screen.width + x;

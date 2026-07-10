@@ -223,5 +223,5 @@ pub fn x_bounded(x: isize, y: usize, screen: &ScreenBuffer, mode: Mode) -> usize
 }
 
 fn y_bounded(y: isize, screen: &ScreenBuffer) -> usize {
-    max(min(screen.last_line() as isize, y), 0) as usize
+    max(min(screen.line_count as isize - 1, y), 0) as usize
 }

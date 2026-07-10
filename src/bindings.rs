@@ -61,8 +61,8 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             cursor.right(screen, context.mode);
         }
         (Mode::Normal, 'o') => {
-            if cursor.y < screen.last_line() {
-                move_block_vertically(screen, cursor.y + 1, screen.last_line() - cursor.y, 1)?;
+            if cursor.y < screen.line_count {
+                move_block_vertically(screen, cursor.y + 1, screen.line_count - cursor.y, 1)?;
             }
 
             cursor.x = 0;
@@ -86,19 +86,19 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             cursor.reset(screen, context.mode);
         }
         (Mode::Delete, 'd') => {
-            move_block_vertically(screen, cursor.y + 1, screen.last_line() - cursor.y, -1)?;
+            move_block_vertically(screen, cursor.y + 1, screen.line_count - cursor.y, -1)?;
 
             context.mode = Mode::Normal;
             cursor.reset(screen, context.mode);
         }
         (Mode::Delete, 'j') => {
-            move_block_vertically(screen, cursor.y + 2, screen.last_line() - cursor.y - 1, -2)?;
+            move_block_vertically(screen, cursor.y + 2, screen.line_count - cursor.y - 1, -2)?;
 
             context.mode = Mode::Normal;
             cursor.reset(screen, context.mode);
         }
         (Mode::Delete, 'k') => {
-            move_block_vertically(screen, cursor.y + 1, screen.last_line() - cursor.y - 1, -2)?;
+            move_block_vertically(screen, cursor.y + 1, screen.line_count - cursor.y - 1, -2)?;
 
             context.mode = Mode::Normal;
             cursor.y -= 1;
@@ -122,7 +122,7 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             cursor.x = 0;
         }
         (Mode::Normal, 'G') => {
-            cursor.y = screen.last_line();
+            cursor.y = screen.line_count - 1;
             cursor.go_to_line_end(screen, context.mode);
         }
         (Mode::Normal, ENTER) => {

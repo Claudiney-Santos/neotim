@@ -1,5 +1,6 @@
 pub mod bindings;
 pub mod cursor;
+pub mod error;
 pub mod file;
 pub mod screen;
 

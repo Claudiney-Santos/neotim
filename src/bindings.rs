@@ -54,7 +54,7 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         (Mode::Normal, 's') => {
             context.mode = Mode::Insert;
             cursor.right(screen, context.mode);
-            backspace(screen, cursor).unwrap();
+            backspace(screen, cursor)?;
         }
         (Mode::Normal, 'a') => {
             context.mode = Mode::Insert;
@@ -62,8 +62,7 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         }
         (Mode::Normal, 'o') => {
             if cursor.y < screen.last_line() {
-                move_block_vertically(screen, cursor.y + 1, screen.last_line() - cursor.y, 1)
-                    .unwrap();
+                move_block_vertically(screen, cursor.y + 1, screen.last_line() - cursor.y, 1)?;
             }
 
             cursor.x = 0;
@@ -87,21 +86,19 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             cursor.reset(screen, context.mode);
         }
         (Mode::Delete, 'd') => {
-            move_block_vertically(screen, cursor.y + 1, screen.last_line() - cursor.y, -1).unwrap();
+            move_block_vertically(screen, cursor.y + 1, screen.last_line() - cursor.y, -1)?;
 
             context.mode = Mode::Normal;
             cursor.reset(screen, context.mode);
         }
         (Mode::Delete, 'j') => {
-            move_block_vertically(screen, cursor.y + 2, screen.last_line() - cursor.y - 1, -2)
-                .unwrap();
+            move_block_vertically(screen, cursor.y + 2, screen.last_line() - cursor.y - 1, -2)?;
 
             context.mode = Mode::Normal;
             cursor.reset(screen, context.mode);
         }
         (Mode::Delete, 'k') => {
-            move_block_vertically(screen, cursor.y + 1, screen.last_line() - cursor.y - 1, -2)
-                .unwrap();
+            move_block_vertically(screen, cursor.y + 1, screen.last_line() - cursor.y - 1, -2)?;
 
             context.mode = Mode::Normal;
             cursor.y -= 1;
@@ -141,11 +138,11 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             }
         }
         (Mode::Insert, ENTER) => {
-            break_line(screen, cursor.x, cursor.y).unwrap();
+            break_line(screen, cursor.x, cursor.y)?;
             cursor.x = 0;
             cursor.y += 1;
         }
-        (Mode::Insert, BACKSPACE) => backspace(screen, cursor).unwrap(),
+        (Mode::Insert, BACKSPACE) => backspace(screen, cursor)?,
         (Mode::Insert, ch) if ch.is_control() => {}
         (Mode::Insert, ch) => {
             move_block_horizontally(
@@ -154,8 +151,7 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
                 cursor.y,
                 screen.line_len(cursor.y) - cursor.x,
                 1,
-            )
-            .unwrap();
+            )?;
 
             let idx = cursor.y * screen.width + cursor.x;
             let char = match ch {

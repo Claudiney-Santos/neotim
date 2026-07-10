@@ -1,4 +1,7 @@
-use crate::cursor::Cursor;
+use crate::{
+    cursor::Cursor,
+    error::{TiError, TiResult},
+};
 use std::{cmp::max, fs, process::exit};
 
 #[repr(C)]
@@ -185,11 +188,11 @@ pub fn move_block_horizontally(
     y: usize,
     size: usize,
     steps: isize,
-) -> Result<(), String> {
+) -> TiResult<()> {
     if (steps < 0 && x as isize + steps < 0)
         && (steps >= 0 && x + size + steps as usize >= screen.width)
     {
-        return Err(String::from("There is no space to do that action"));
+        return Err(TiError("There is no space to do that action"));
     }
 
     let start = y * screen.width + x;
@@ -217,11 +220,11 @@ pub fn move_block_vertically(
     line: usize,
     size: usize,
     steps: isize,
-) -> Result<(), String> {
+) -> TiResult<()> {
     if (steps < 0 && line as isize + steps < 0)
         || (steps >= 0 && (line + size) as isize >= screen.height as isize - steps)
     {
-        return Err(String::from("There is no space to do that action"));
+        return Err(TiError("There is no space to do that action"));
     }
 
     let start = line * screen.width;
@@ -244,7 +247,7 @@ pub fn move_block_vertically(
     Ok(())
 }
 
-pub fn backspace(screen: &mut ScreenBuffer, cursor: &mut Cursor) -> Result<(), String> {
+pub fn backspace(screen: &mut ScreenBuffer, cursor: &mut Cursor) -> TiResult<()> {
     if cursor.x == 0 && cursor.y == 0 {
         return Ok(());
     }
@@ -286,7 +289,7 @@ pub fn backspace(screen: &mut ScreenBuffer, cursor: &mut Cursor) -> Result<(), S
 
     Ok(())
 }
-pub fn break_line(screen: &mut ScreenBuffer, x: usize, y: usize) -> Result<(), String> {
+pub fn break_line(screen: &mut ScreenBuffer, x: usize, y: usize) -> TiResult<()> {
     if y < screen.last_line() {
         move_block_vertically(screen, y + 1, screen.last_line() - y, 1)?;
     }

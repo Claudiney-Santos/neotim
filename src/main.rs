@@ -1,7 +1,4 @@
-use std::{
-    env,
-    process::{Command, exit},
-};
+use std::{env, process::Command};
 
 use ti::{
     bindings::*,
@@ -33,8 +30,7 @@ pub fn generate_patch(diff: Vec<(usize, usize, char)>) -> String {
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        eprintln!("You need to provide the file path!");
-        exit(1);
+        panic!("You need to provide the file path!");
     }
 
     let mut context = Context::new(&args[1]);
@@ -60,7 +56,7 @@ fn main() -> anyhow::Result<()> {
         prin!(
             "{}{}",
             generate_patch(diff),
-            &context.cursor.build(&context.back_buffer, context.mode)
+            context.cursor.build(&context.back_buffer, context.mode)
         );
 
         if !process_input(&mut context)? {

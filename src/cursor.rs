@@ -66,8 +66,9 @@ impl Cursor {
         self.x = 0;
 
         for i in start..end {
-            if screen.cells[i].char != ' ' {
-                self.x = i % screen.width;
+            self.x = i % screen.width;
+
+            if screen.cells[i].char != ' ' && screen.cells[i].char != '·' {
                 break;
             }
         }

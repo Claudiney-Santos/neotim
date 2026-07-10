@@ -1,10 +1,10 @@
-use crate::screen::{
-    Cell, Context, Mode, backspace, break_line, move_block_horizontally, move_block_vertically,
+use crate::{
+    file,
+    screen::{
+        Cell, Context, Mode, backspace, break_line, move_block_horizontally, move_block_vertically,
+    },
 };
-use std::{
-    fs,
-    io::{Read, stdin},
-};
+use std::io::{Read, stdin};
 
 const BACKSPACE: char = '\x7F';
 const ESC: char = '\x1b';
@@ -12,35 +12,15 @@ const ESC: char = '\x1b';
 pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
     let Context {
         cursor,
+        file_path,
         back_buffer,
-        front_buffer,
         mode,
         ..
     } = context;
 
     match (mode, key) {
         (Mode::Normal, 'Q') => return Ok(false),
-        (Mode::Normal, 'W') => {
-            let mut content = String::new();
-            let mut i = 0;
-            while i < front_buffer.width * front_buffer.height {
-                if front_buffer.cells[i].char == ' ' {
-                    i += front_buffer.width - i % front_buffer.width;
-                    content.push('\n');
-                    continue;
-                }
-
-                if front_buffer.cells[i].char == '·' {
-                    front_buffer.cells[i].char = ' ';
-                }
-
-                content.push(front_buffer.cells[i].char);
-                i += 1;
-            }
-
-            // fs::write(&format!("{}.copy", &context.file_path), content.clone())?;
-            fs::write(context.file_path.clone(), content)?;
-        }
+        (Mode::Normal, 'W') => file::save(file_path, back_buffer)?,
         (Mode::Normal, 'h') => cursor.left(back_buffer, context.mode),
         (Mode::Normal, 'j') => cursor.down(back_buffer),
         (Mode::Normal, 'k') => cursor.up(back_buffer),

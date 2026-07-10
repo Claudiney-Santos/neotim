@@ -1,5 +1,6 @@
 pub mod bindings;
 pub mod cursor;
+pub mod file;
 pub mod screen;
 
 pub const BREAK_LINE: &str = "\r\n";

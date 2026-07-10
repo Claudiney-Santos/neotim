@@ -74,10 +74,10 @@ pub fn move_block_vertically(
 }
 
 pub fn break_line(screen: &mut ScreenBuffer, x: usize, y: usize) -> Result<(), String> {
-    move_block_vertically(screen, y + 1, screen.last_line() - y, 1)?;
+    move_block_vertically(screen, y + 1, screen.last_line() + 1 - y, 1)?;
 
     let start = y * screen.width + x;
-    let end = y * screen.width + screen.last_char(y);
+    let end = y * screen.width + screen.line_len(y);
 
     screen.cells.copy_within(start..end, (y + 1) * screen.width);
 

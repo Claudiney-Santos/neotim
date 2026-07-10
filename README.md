@@ -9,6 +9,9 @@ Toy text editor
 - [X] Implement dd, dj and dk
 - [X] Implement o
 - [X] Refactor Code
-- [ ] Implement Undo
+- [X] Implement Undo
+- [X] Fix backspace
+- [X] Fix breakline
+- [X] Fix 'a' command on empty line
 - [ ] Implement visual mode
 - [ ] Implement virtual screen matrix

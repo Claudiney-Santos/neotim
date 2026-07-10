@@ -6,6 +6,9 @@ use std::{
     io::{Read, stdin},
 };
 
+const BACKSPACE: char = '\x7F';
+const ESC: char = '\x1b';
+
 pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
     let Context {
         cursor,
@@ -106,7 +109,7 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         (Mode::Normal, 'r') => {
             context.mode = Mode::Replace;
         }
-        (Mode::Insert, '\x1b') => {
+        (Mode::Insert, ESC) => {
             context.mode = Mode::Normal;
             cursor.reset(back_buffer, context.mode);
         }
@@ -168,7 +171,7 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             cursor.y = back_buffer.last_line();
             cursor.go_to_line_end(back_buffer, context.mode);
         }
-        (Mode::Insert, '\x08' | '\x7F') => backspace(back_buffer, cursor).unwrap(),
+        (Mode::Insert, BACKSPACE) => backspace(back_buffer, cursor).unwrap(),
         (Mode::Insert, '\n' | '\r') => {
             break_line(back_buffer, cursor.x, cursor.y).unwrap();
             cursor.x = 0;

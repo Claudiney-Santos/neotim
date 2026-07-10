@@ -1,4 +1,4 @@
-use crate::cursor::Cursor;
+use crate::{cursor::Cursor, screen};
 use std::{
     cmp::{max, min},
     fs,
@@ -135,7 +135,7 @@ impl ScreenBuffer {
             counter -= 1;
         }
 
-        max((counter / self.width) as isize - 1, 0) as usize
+        counter / self.width
     }
 }
 
@@ -258,17 +258,20 @@ pub fn backspace(screen: &mut ScreenBuffer, cursor: &mut Cursor) -> Result<(), S
             screen,
             cursor.x,
             cursor.y,
-            screen.last_char(cursor.y) - cursor.x,
+            screen.line_len(cursor.y) - cursor.x,
             -1,
         )?;
         cursor.x -= 1;
         return Ok(());
     }
 
-    let start = cursor.y * screen.width;
-    let end = cursor.y * screen.width + screen.last_char(cursor.y);
+    cursor.y -= 1;
+    cursor.go_to_line_end(screen, Mode::Insert);
 
-    let dest = (cursor.y - 1) * screen.width + screen.last_char(cursor.y - 1);
+    let start = (cursor.y + 1) * screen.width;
+    let end = (cursor.y + 1) * screen.width + screen.line_len(cursor.y + 1);
+
+    let dest = cursor.y * screen.width + screen.line_len(cursor.y);
 
     screen.cells.copy_within(start..end, dest);
 
@@ -276,15 +279,21 @@ pub fn backspace(screen: &mut ScreenBuffer, cursor: &mut Cursor) -> Result<(), S
         screen.cells[i] = Cell { char: ' ' };
     }
 
-    move_block_vertically(screen, cursor.y + 1, screen.last_line() - cursor.y - 1, -1)?;
-
-    cursor.x = screen.last_char(cursor.y - 1);
-    cursor.y -= 1;
+    if cursor.y < screen.last_line() {
+        move_block_vertically(
+            screen,
+            cursor.y + 2,
+            screen.last_line() - (cursor.y + 1),
+            -1,
+        )?;
+    }
 
     Ok(())
 }
 pub fn break_line(screen: &mut ScreenBuffer, x: usize, y: usize) -> Result<(), String> {
-    move_block_vertically(screen, y + 1, screen.last_line() + 1 - y, 1)?;
+    if y < screen.last_line() {
+        move_block_vertically(screen, y + 1, screen.last_line() - y, 1)?;
+    }
 
     let start = y * screen.width + x;
     let end = y * screen.width + screen.line_len(y);

@@ -64,7 +64,7 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         }
         (Mode::Normal, 'I') => {
             context.mode = Mode::Insert;
-            cursor.go_to_line_start(back_buffer, context.mode);
+            cursor.go_to_line_start(back_buffer);
         }
         (Mode::Normal, 'w') => cursor.go_to_next_word(back_buffer),
         (Mode::Normal, 'b') => cursor.go_to_prev_word(back_buffer),

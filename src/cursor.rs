@@ -23,10 +23,14 @@ impl Cursor {
         }
     }
 
-    pub fn build(&self, virtual_x: usize, mode: Mode) -> String {
+    pub fn build(&self, screen: &ScreenBuffer, mode: Mode) -> String {
         let mut building = String::new();
 
-        building.push_str(&format!("\x1b[{};{}H", self.y + 1, virtual_x + 1));
+        building.push_str(&format!(
+            "\x1b[{};{}H",
+            self.y + 1,
+            x_bounded(self.x as isize, self.y, screen, mode) + 1
+        ));
 
         let mode = match mode {
             Mode::Normal => CURSOR_BLOCK,
@@ -41,49 +45,31 @@ impl Cursor {
         building
     }
 
-    fn x_end_bound(&self, screen: &ScreenBuffer, mode: Mode) -> usize {
-        let base_bound = max(screen.line_len(self.y) as isize - 1, 0) as usize;
-
-        match (mode, screen.line_len(self.y)) {
-            (Mode::Insert, 0) => 0,
-            (Mode::Insert, _) => base_bound + 1,
-            _ => base_bound,
-        }
-    }
-
-    fn y_end_bound(&self, screen: &ScreenBuffer) -> usize {
-        screen.last_line()
-    }
-
     pub fn reset(&mut self, screen: &ScreenBuffer, mode: Mode) {
-        self.x = min(self.x_end_bound(screen, mode), self.x);
+        self.x = x_bounded(self.x as isize, self.y, screen, mode)
     }
 
     pub fn left(&mut self, screen: &ScreenBuffer, mode: Mode) {
-        self.x = max(
-            min(self.x_end_bound(screen, mode) as isize, self.x as isize - 1),
-            0,
-        ) as usize;
+        self.x = x_bounded(self.x as isize - 1, self.y, screen, mode);
     }
 
     pub fn right(&mut self, screen: &ScreenBuffer, mode: Mode) {
-        self.x = max(min(self.x_end_bound(screen, mode), self.x + 1), 0);
+        self.x = x_bounded(self.x as isize + 1, self.y, screen, mode);
     }
 
     pub fn down(&mut self, screen: &ScreenBuffer) {
-        self.y = max(min(self.y_end_bound(screen), self.y + 1), 0);
+        self.y = y_bounded(self.y as isize + 1, screen);
     }
 
     pub fn up(&mut self, screen: &ScreenBuffer) {
-        self.y = max(
-            min(self.y_end_bound(screen) as isize, self.y as isize - 1),
-            0,
-        ) as usize;
+        self.y = y_bounded(self.y as isize - 1, screen);
     }
 
-    pub fn go_to_line_start(&mut self, screen: &ScreenBuffer, mode: Mode) {
+    pub fn go_to_line_start(&mut self, screen: &ScreenBuffer) {
         let start = self.y * screen.width;
-        let end = start + self.x_end_bound(screen, mode);
+        let end = start + screen.line_len(self.y);
+
+        self.x = 0;
 
         for i in start..end {
             if screen.cells[i].char != ' ' {
@@ -94,7 +80,7 @@ impl Cursor {
     }
 
     pub fn go_to_line_end(&mut self, screen: &ScreenBuffer, mode: Mode) {
-        self.x = self.x_end_bound(screen, mode);
+        self.x = x_bounded(screen.width as isize, self.y, screen, mode);
     }
 
     pub fn go_to_next_word(&mut self, screen: &ScreenBuffer) {
@@ -227,4 +213,20 @@ impl Cursor {
 
 fn is_whitespace(c: char) -> bool {
     c == ' ' || c == '·'
+}
+
+pub fn x_bounded(x: isize, y: usize, screen: &ScreenBuffer, mode: Mode) -> usize {
+    let base_bound = max(screen.line_len(y) as isize - 1, 0) as usize;
+
+    let bound = match (mode, screen.line_len(y)) {
+        (Mode::Insert, 0) => 0,
+        (Mode::Insert, _) => base_bound + 1,
+        _ => base_bound,
+    };
+
+    max(min(bound as isize, x), 0) as usize
+}
+
+fn y_bounded(y: isize, screen: &ScreenBuffer) -> usize {
+    max(min(screen.last_line() as isize, y), 0) as usize
 }

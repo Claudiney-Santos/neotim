@@ -1,9 +1,5 @@
-use crate::{cursor::Cursor, screen};
-use std::{
-    cmp::{max, min},
-    fs,
-    process::exit,
-};
+use crate::cursor::Cursor;
+use std::{cmp::max, fs, process::exit};
 
 #[repr(C)]
 struct WinSize {
@@ -46,7 +42,17 @@ pub struct ScreenBuffer {
 }
 
 impl ScreenBuffer {
-    pub fn new(content: &Vec<u8>, width: usize, height: usize) -> Self {
+    pub fn new(width: usize, height: usize) -> Self {
+        let cells = vec![Cell { char: ' ' }; width * height];
+
+        Self {
+            width,
+            height,
+            cells,
+        }
+    }
+
+    pub fn from(content: &Vec<u8>, width: usize, height: usize) -> Self {
         let mut cells = vec![Cell { char: ' ' }; width * height];
 
         let (mut x, mut y) = (0, 0);
@@ -162,24 +168,14 @@ impl Context {
         let content = fs::read(path).expect("File not found!");
         let (width, height) = terminal_size();
 
-        let screen_buffer = ScreenBuffer::new(&content, width, height);
-
         Self {
-            front_buffer: screen_buffer.clone(),
-            back_buffer: screen_buffer,
+            front_buffer: ScreenBuffer::new(width, height),
+            back_buffer: ScreenBuffer::from(&content, width, height),
             cursor: Cursor::new(),
-            mode: Mode::Normal,
+            mode: Mode::Undo,
             file_path: path.to_owned(),
             undo_list: vec![],
         }
-    }
-
-    pub fn get_min_x(&self) -> usize {
-        min(self.back_buffer.last_char(self.cursor.y), self.cursor.x)
-    }
-
-    pub fn get_min_y(&self) -> usize {
-        min(self.back_buffer.last_line(), self.back_buffer.height)
     }
 }
 
@@ -305,4 +301,23 @@ pub fn break_line(screen: &mut ScreenBuffer, x: usize, y: usize) -> Result<(), S
     }
 
     Ok(())
+}
+
+pub fn generate_diff(
+    front: &ScreenBuffer,
+    back: &ScreenBuffer,
+) -> (Vec<(usize, usize, char)>, Vec<(usize, usize, char)>) {
+    let mut diff = Vec::new();
+    let mut undo = Vec::new();
+
+    for i in 0..front.cells.len() {
+        if front.cells[i] != back.cells[i] {
+            let x = i % front.width;
+            let y = i / front.width;
+            diff.push((x, y, back.cells[i].char));
+            undo.push((x, y, front.cells[i].char));
+        }
+    }
+
+    (diff, undo)
 }

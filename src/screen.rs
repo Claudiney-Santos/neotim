@@ -1,3 +1,4 @@
+use crate::cursor::Cursor;
 use std::{
     cmp::{max, min},
     fs,
@@ -101,6 +102,18 @@ impl ScreenBuffer {
         }
     }
 
+    pub fn line_len(&self, line: usize) -> usize {
+        let mut counter = 0;
+        for i in self.width * line..self.width * (line + 1) {
+            if self.cells[i].char == ' ' {
+                break;
+            }
+            counter += 1;
+        }
+
+        counter
+    }
+
     pub fn last_char(&self, line: usize) -> usize {
         let mut counter = 0;
         for i in self.width * line..self.width * (line + 1) {
@@ -122,47 +135,7 @@ impl ScreenBuffer {
             counter -= 1;
         }
 
-        counter / self.width
-    }
-}
-
-const CURSOR_BLOCK: usize = 2;
-const CURSOR_UNDERLINE: usize = 4;
-const CURSOR_BAR: usize = 6;
-
-pub struct Cursor {
-    pub x: usize,
-    pub y: usize,
-    pub last_x: usize,
-    pub last_y: usize,
-}
-
-impl Cursor {
-    pub fn new() -> Self {
-        Self {
-            x: 0,
-            y: 0,
-            last_x: 0,
-            last_y: 0,
-        }
-    }
-
-    pub fn build(&self, virtual_x: usize, mode: Mode) -> String {
-        let mut building = String::new();
-
-        building.push_str(&format!("\x1b[{};{}H", self.y + 1, virtual_x + 1));
-
-        let mode = match mode {
-            Mode::Normal => CURSOR_BLOCK,
-            Mode::Undo => CURSOR_BLOCK,
-            Mode::Replace => CURSOR_UNDERLINE,
-            Mode::Delete => CURSOR_UNDERLINE,
-            Mode::Insert => CURSOR_BAR,
-        };
-
-        building.push_str(&format!("\x1b[{} q", mode));
-
-        building
+        max((counter / self.width) as isize - 1, 0) as usize
     }
 }
 

@@ -160,7 +160,7 @@ pub struct Context {
     pub file_path: String,
     pub cursor: Cursor,
     pub mode: Mode,
-    pub undo_list: Vec<(usize, usize, Vec<(usize, usize, char)>)>,
+    pub undo_list: Vec<(Cursor, Vec<(usize, usize, char)>)>,
 }
 
 impl Context {

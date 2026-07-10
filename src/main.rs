@@ -5,6 +5,7 @@ use std::{
 
 use ti::{
     bindings::*,
+    cursor::Cursor,
     screen::{Context, Mode, generate_diff},
     *,
 };
@@ -15,12 +16,13 @@ pub fn generate_patch(diff: Vec<(usize, usize, char)>) -> String {
     render.push_str(HIDE_CURSOR);
 
     for (cx, cy, char) in diff {
-        if char == '·' {
-            render.push_str(&format!("\x1b[{};{}H\x1b[90m·\x1b[0m", cy + 1, cx + 1));
-            continue;
-        }
-
-        render.push_str(&format!("\x1b[{};{}H{}", cy + 1, cx + 1, char));
+        render.push_str(&format!(
+            "\x1b[{};{}H\x1b[{}m{}\x1b[0m",
+            cy + 1,
+            cx + 1,
+            if char == '·' { "90" } else { "0" },
+            char,
+        ));
     }
 
     render.push_str(SHOW_CURSOR);
@@ -36,6 +38,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     let mut context = Context::new(&args[1]);
+    let mut last_cursor = Cursor::new();
 
     Command::new("stty").args(["raw", "-echo"]).status()?;
     print!("{CLEAR_SCREEN}");
@@ -44,9 +47,7 @@ fn main() -> anyhow::Result<()> {
         let (diff, undo) = generate_diff(&context.front_buffer, &context.back_buffer);
 
         if undo.len() > 0 && context.mode != Mode::Undo {
-            context
-                .undo_list
-                .push((context.cursor.last_x, context.cursor.last_y, undo));
+            context.undo_list.push((last_cursor, undo));
         }
 
         if context.mode == Mode::Undo {
@@ -54,8 +55,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         context.front_buffer = context.back_buffer.clone();
-        context.cursor.last_x = context.cursor.x;
-        context.cursor.last_y = context.cursor.y;
+        last_cursor = context.cursor;
 
         prin!(
             "{}{}",

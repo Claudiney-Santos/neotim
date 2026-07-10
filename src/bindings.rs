@@ -30,17 +30,14 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             cursor.reset(back_buffer, context.mode);
         }
         (Mode::Normal, 'u') => {
-            if let Some(undo) = context.undo_list.pop() {
-                for u in undo.2.iter() {
-                    let idx = u.1 * back_buffer.width + u.0;
-                    back_buffer.cells[idx].char = u.2;
+            if let Some((last_cursor, chars)) = context.undo_list.pop() {
+                for (x, y, ch) in chars.iter() {
+                    let idx = y * back_buffer.width + x;
+                    back_buffer.cells[idx].char = *ch;
                 }
-
-                cursor.x = undo.0;
-                cursor.y = undo.1;
+                *cursor = last_cursor;
+                context.mode = Mode::Undo;
             }
-
-            context.mode = Mode::Undo;
         }
         (Mode::Normal, 'I') => {
             context.mode = Mode::Insert;

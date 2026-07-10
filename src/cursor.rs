@@ -6,21 +6,15 @@ const CURSOR_BLOCK: usize = 2;
 const CURSOR_UNDERLINE: usize = 4;
 const CURSOR_BAR: usize = 6;
 
+#[derive(Copy, Clone)]
 pub struct Cursor {
     pub x: usize,
     pub y: usize,
-    pub last_x: usize,
-    pub last_y: usize,
 }
 
 impl Cursor {
     pub fn new() -> Self {
-        Self {
-            x: 0,
-            y: 0,
-            last_x: 0,
-            last_y: 0,
-        }
+        Self { x: 0, y: 0 }
     }
 
     pub fn build(&self, screen: &ScreenBuffer, mode: Mode) -> String {

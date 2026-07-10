@@ -1,3 +1,4 @@
+use crate::{cursor::Cursor, screen};
 use std::{
     cmp::{max, min},
     fs,
@@ -101,6 +102,18 @@ impl ScreenBuffer {
         }
     }
 
+    pub fn line_len(&self, line: usize) -> usize {
+        let mut counter = 0;
+        for i in self.width * line..self.width * (line + 1) {
+            if self.cells[i].char == ' ' {
+                break;
+            }
+            counter += 1;
+        }
+
+        counter
+    }
+
     pub fn last_char(&self, line: usize) -> usize {
         let mut counter = 0;
         for i in self.width * line..self.width * (line + 1) {
@@ -123,46 +136,6 @@ impl ScreenBuffer {
         }
 
         counter / self.width
-    }
-}
-
-const CURSOR_BLOCK: usize = 2;
-const CURSOR_UNDERLINE: usize = 4;
-const CURSOR_BAR: usize = 6;
-
-pub struct Cursor {
-    pub x: usize,
-    pub y: usize,
-    pub last_x: usize,
-    pub last_y: usize,
-}
-
-impl Cursor {
-    pub fn new() -> Self {
-        Self {
-            x: 0,
-            y: 0,
-            last_x: 0,
-            last_y: 0,
-        }
-    }
-
-    pub fn build(&self, virtual_x: usize, mode: Mode) -> String {
-        let mut building = String::new();
-
-        building.push_str(&format!("\x1b[{};{}H", self.y + 1, virtual_x + 1));
-
-        let mode = match mode {
-            Mode::Normal => CURSOR_BLOCK,
-            Mode::Undo => CURSOR_BLOCK,
-            Mode::Replace => CURSOR_UNDERLINE,
-            Mode::Delete => CURSOR_UNDERLINE,
-            Mode::Insert => CURSOR_BAR,
-        };
-
-        building.push_str(&format!("\x1b[{} q", mode));
-
-        building
     }
 }
 
@@ -208,4 +181,128 @@ impl Context {
     pub fn get_min_y(&self) -> usize {
         min(self.back_buffer.last_line(), self.back_buffer.height)
     }
+}
+
+pub fn move_block_horizontally(
+    screen: &mut ScreenBuffer,
+    x: usize,
+    y: usize,
+    size: usize,
+    steps: isize,
+) -> Result<(), String> {
+    if (steps < 0 && x as isize + steps < 0)
+        && (steps >= 0 && x + size + steps as usize >= screen.width)
+    {
+        return Err(String::from("There is no space to do that action"));
+    }
+
+    let start = y * screen.width + x;
+    let end = y * screen.width + x + size;
+
+    screen
+        .cells
+        .copy_within(start..end, max(0, start as isize + steps) as usize);
+
+    if steps >= 0 {
+        for i in start..start + steps as usize {
+            screen.cells[i] = Cell { char: '·' };
+        }
+    } else {
+        for i in max(0, end as isize + steps) as usize..end {
+            screen.cells[i] = Cell { char: ' ' };
+        }
+    }
+
+    Ok(())
+}
+
+pub fn move_block_vertically(
+    screen: &mut ScreenBuffer,
+    line: usize,
+    size: usize,
+    steps: isize,
+) -> Result<(), String> {
+    if (steps < 0 && line as isize + steps < 0)
+        || (steps >= 0 && (line + size) as isize >= screen.height as isize - steps)
+    {
+        return Err(String::from("There is no space to do that action"));
+    }
+
+    let start = line * screen.width;
+    let end = (line + size) * screen.width;
+
+    let dest = max(0, start as isize + (screen.width as isize * steps)) as usize;
+
+    screen.cells.copy_within(start..(end - 1), dest);
+
+    if steps < 0 {
+        for i in max(0, end as isize + steps * screen.width as isize) as usize..end {
+            screen.cells[i] = Cell { char: ' ' };
+        }
+    } else {
+        for i in start..((line + max(0, steps as usize)) * screen.width) {
+            screen.cells[i] = Cell { char: ' ' };
+        }
+    }
+
+    Ok(())
+}
+
+pub fn backspace(screen: &mut ScreenBuffer, cursor: &mut Cursor) -> Result<(), String> {
+    if cursor.x == 0 && cursor.y == 0 {
+        return Ok(());
+    }
+
+    if cursor.x > 0 {
+        move_block_horizontally(
+            screen,
+            cursor.x,
+            cursor.y,
+            screen.line_len(cursor.y) - cursor.x,
+            -1,
+        )?;
+        cursor.x -= 1;
+        return Ok(());
+    }
+
+    cursor.y -= 1;
+    cursor.go_to_line_end(screen, Mode::Insert);
+
+    let start = (cursor.y + 1) * screen.width;
+    let end = (cursor.y + 1) * screen.width + screen.line_len(cursor.y + 1);
+
+    let dest = cursor.y * screen.width + screen.line_len(cursor.y);
+
+    screen.cells.copy_within(start..end, dest);
+
+    for i in start..end {
+        screen.cells[i] = Cell { char: ' ' };
+    }
+
+    if cursor.y < screen.last_line() {
+        move_block_vertically(
+            screen,
+            cursor.y + 2,
+            screen.last_line() - (cursor.y + 1),
+            -1,
+        )?;
+    }
+
+    Ok(())
+}
+pub fn break_line(screen: &mut ScreenBuffer, x: usize, y: usize) -> Result<(), String> {
+    if y < screen.last_line() {
+        move_block_vertically(screen, y + 1, screen.last_line() - y, 1)?;
+    }
+
+    let start = y * screen.width + x;
+    let end = y * screen.width + screen.line_len(y);
+
+    screen.cells.copy_within(start..end, (y + 1) * screen.width);
+
+    for i in start..end {
+        screen.cells[i] = Cell { char: ' ' };
+    }
+
+    Ok(())
 }

@@ -1,0 +1,230 @@
+use std::cmp::{max, min};
+
+use crate::screen::{Mode, ScreenBuffer};
+
+const CURSOR_BLOCK: usize = 2;
+const CURSOR_UNDERLINE: usize = 4;
+const CURSOR_BAR: usize = 6;
+
+pub struct Cursor {
+    pub x: usize,
+    pub y: usize,
+    pub last_x: usize,
+    pub last_y: usize,
+}
+
+impl Cursor {
+    pub fn new() -> Self {
+        Self {
+            x: 0,
+            y: 0,
+            last_x: 0,
+            last_y: 0,
+        }
+    }
+
+    pub fn build(&self, virtual_x: usize, mode: Mode) -> String {
+        let mut building = String::new();
+
+        building.push_str(&format!("\x1b[{};{}H", self.y + 1, virtual_x + 1));
+
+        let mode = match mode {
+            Mode::Normal => CURSOR_BLOCK,
+            Mode::Undo => CURSOR_BLOCK,
+            Mode::Replace => CURSOR_UNDERLINE,
+            Mode::Delete => CURSOR_UNDERLINE,
+            Mode::Insert => CURSOR_BAR,
+        };
+
+        building.push_str(&format!("\x1b[{} q", mode));
+
+        building
+    }
+
+    fn x_end_bound(&self, screen: &ScreenBuffer, mode: Mode) -> usize {
+        let base_bound = max(screen.line_len(self.y) as isize - 1, 0) as usize;
+
+        match (mode, screen.line_len(self.y)) {
+            (Mode::Insert, 0) => 0,
+            (Mode::Insert, _) => base_bound + 1,
+            _ => base_bound,
+        }
+    }
+
+    fn y_end_bound(&self, screen: &ScreenBuffer) -> usize {
+        screen.last_line()
+    }
+
+    pub fn reset(&mut self, screen: &ScreenBuffer, mode: Mode) {
+        self.x = min(self.x_end_bound(screen, mode), self.x);
+    }
+
+    pub fn left(&mut self, screen: &ScreenBuffer, mode: Mode) {
+        self.x = max(
+            min(self.x_end_bound(screen, mode) as isize, self.x as isize - 1),
+            0,
+        ) as usize;
+    }
+
+    pub fn right(&mut self, screen: &ScreenBuffer, mode: Mode) {
+        self.x = max(min(self.x_end_bound(screen, mode), self.x + 1), 0);
+    }
+
+    pub fn down(&mut self, screen: &ScreenBuffer) {
+        self.y = max(min(self.y_end_bound(screen), self.y + 1), 0);
+    }
+
+    pub fn up(&mut self, screen: &ScreenBuffer) {
+        self.y = max(
+            min(self.y_end_bound(screen) as isize, self.y as isize - 1),
+            0,
+        ) as usize;
+    }
+
+    pub fn go_to_line_start(&mut self, screen: &ScreenBuffer, mode: Mode) {
+        let start = self.y * screen.width;
+        let end = start + self.x_end_bound(screen, mode);
+
+        for i in start..end {
+            if screen.cells[i].char != ' ' {
+                self.x = i % screen.width;
+                break;
+            }
+        }
+    }
+
+    pub fn go_to_line_end(&mut self, screen: &ScreenBuffer, mode: Mode) {
+        self.x = self.x_end_bound(screen, mode);
+    }
+
+    pub fn go_to_next_word(&mut self, screen: &ScreenBuffer) {
+        let mut idx = self.y * screen.width + self.x;
+
+        enum State {
+            Alphabetic,
+            NonAlphabetic,
+            WhiteSpace,
+        }
+
+        let state = match screen.cells[idx].char {
+            c if c.is_alphanumeric() => State::Alphabetic,
+            c if is_whitespace(c) => State::WhiteSpace,
+            _ => State::NonAlphabetic,
+        };
+
+        for (i, c) in screen.cells.iter().skip(idx).enumerate() {
+            match (&state, c.char) {
+                (State::Alphabetic, c) if !c.is_alphanumeric() => {
+                    idx += i;
+                    break;
+                }
+                (State::NonAlphabetic, c) if c.is_alphanumeric() || is_whitespace(c) => {
+                    idx += i;
+                    break;
+                }
+                (State::WhiteSpace, c) if !is_whitespace(c) => {
+                    idx += i;
+                    break;
+                }
+                _ => {}
+            }
+        }
+
+        for (i, c) in screen.cells.iter().skip(idx).enumerate() {
+            match c.char {
+                c if !is_whitespace(c) => {
+                    idx += i;
+                    break;
+                }
+                _ => {}
+            }
+        }
+
+        self.x = idx % screen.width;
+        self.y = idx / screen.width;
+    }
+
+    pub fn go_to_prev_word(&mut self, screen: &ScreenBuffer) {
+        let mut idx = self.y * screen.width + self.x;
+
+        enum State {
+            Alphabetic,
+            NonAlphabetic,
+            WhiteSpace,
+        }
+
+        let mut state = match screen.cells[idx - 1].char {
+            c if c.is_alphanumeric() => State::Alphabetic,
+            c if is_whitespace(c) => State::WhiteSpace,
+            _ => State::NonAlphabetic,
+        };
+
+        for (i, c) in screen.cells.iter().take(idx - 1).rev().enumerate() {
+            match (&state, c.char) {
+                (State::Alphabetic, c) if !c.is_alphanumeric() => {
+                    idx -= i + 1;
+                    break;
+                }
+                (State::NonAlphabetic, c) if c.is_alphanumeric() || is_whitespace(c) => {
+                    idx -= i + 1;
+                    break;
+                }
+                (State::WhiteSpace, c) if !is_whitespace(c) => {
+                    if c.is_alphanumeric() {
+                        state = State::Alphabetic;
+                    } else {
+                        state = State::NonAlphabetic;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        self.x = idx % screen.width;
+        self.y = idx / screen.width;
+    }
+
+    pub fn go_to_last_char_of_next_word(&mut self, screen: &ScreenBuffer) {
+        let mut idx = self.y * screen.width + self.x;
+
+        enum State {
+            Alphabetic,
+            NonAlphabetic,
+            WhiteSpace,
+        }
+
+        let mut state = match screen.cells[idx + 1].char {
+            c if c.is_alphanumeric() => State::Alphabetic,
+            c if is_whitespace(c) => State::WhiteSpace,
+            _ => State::NonAlphabetic,
+        };
+
+        for (i, c) in screen.cells.iter().skip(idx + 1).enumerate() {
+            match (&state, c.char) {
+                (State::Alphabetic, c) if !c.is_alphanumeric() => {
+                    idx += i;
+                    break;
+                }
+                (State::NonAlphabetic, c) if c.is_alphanumeric() || is_whitespace(c) => {
+                    idx += i;
+                    break;
+                }
+                (State::WhiteSpace, c) if !is_whitespace(c) => {
+                    if c.is_alphanumeric() {
+                        state = State::Alphabetic;
+                    } else {
+                        state = State::NonAlphabetic;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        self.x = idx % screen.width;
+        self.y = idx / screen.width;
+    }
+}
+
+fn is_whitespace(c: char) -> bool {
+    c == ' ' || c == '·'
+}

@@ -60,19 +60,25 @@ impl Cursor {
     }
 
     pub fn left(&mut self, screen: &ScreenBuffer, mode: Mode) {
-        self.x = max(min(self.x_end_bound(screen, mode), self.x) as isize - 1, 0) as usize;
+        self.x = max(
+            min(self.x_end_bound(screen, mode) as isize, self.x as isize - 1),
+            0,
+        ) as usize;
     }
 
     pub fn right(&mut self, screen: &ScreenBuffer, mode: Mode) {
-        self.x = max(min(self.x_end_bound(screen, mode), self.x) + 1, 0);
+        self.x = max(min(self.x_end_bound(screen, mode), self.x + 1), 0);
     }
 
     pub fn down(&mut self, screen: &ScreenBuffer) {
-        self.y = max(min(self.y_end_bound(screen), self.y) + 1, 0);
+        self.y = max(min(self.y_end_bound(screen), self.y + 1), 0);
     }
 
     pub fn up(&mut self, screen: &ScreenBuffer) {
-        self.y = max(min(self.y_end_bound(screen), self.y) as isize - 1, 0) as usize;
+        self.y = max(
+            min(self.y_end_bound(screen) as isize, self.y as isize - 1),
+            0,
+        ) as usize;
     }
 
     pub fn go_to_line_start(&mut self, screen: &ScreenBuffer, mode: Mode) {

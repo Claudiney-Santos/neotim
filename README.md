@@ -14,5 +14,7 @@ Toy text editor
 - [X] Fix breakline
 - [X] Fix 'a' command on empty line
 - [X] Refactor main loop
+- [ ] Implement last line tracker
+- [ ] Implement x command
 - [ ] Implement visual mode
 - [ ] Implement virtual screen matrix

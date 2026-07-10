@@ -13,5 +13,6 @@ Toy text editor
 - [X] Fix backspace
 - [X] Fix breakline
 - [X] Fix 'a' command on empty line
+- [X] Refactor main loop
 - [ ] Implement visual mode
 - [ ] Implement virtual screen matrix

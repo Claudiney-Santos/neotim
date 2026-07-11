@@ -3,6 +3,7 @@ pub mod cursor;
 pub mod error;
 pub mod file;
 pub mod screen;
+pub mod undo;
 
 pub const CLEAR_SCREEN: &str = "\x1b[2J\x1b[H";
 pub const HIDE_CURSOR: &str = "\x1b[?25l";

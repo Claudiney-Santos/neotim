@@ -1,8 +1,9 @@
 use crate::{
     cursor::Cursor,
     error::{TiError, TiResult},
+    undo::{UndoEntry, UndoStack},
 };
-use std::{cmp::max, fs, process::exit};
+use std::{cmp::max, env, fs, process::exit};
 
 #[repr(C)]
 struct WinSize {
@@ -42,21 +43,22 @@ pub struct ScreenBuffer {
     pub width: usize,
     pub height: usize,
     pub cells: Vec<Cell>,
+    pub line_count: usize,
 }
 
 impl ScreenBuffer {
-    pub fn new(width: usize, height: usize) -> Self {
-        let cells = vec![Cell { char: ' ' }; width * height];
-
+    pub fn new(width: usize, height: usize, line_count: usize) -> Self {
         Self {
             width,
             height,
-            cells,
+            cells: vec![Cell { char: ' ' }; width * height],
+            line_count,
         }
     }
 
     pub fn from(content: &Vec<u8>, width: usize, height: usize) -> Self {
         let mut cells = vec![Cell { char: ' ' }; width * height];
+        let mut line_count = 0;
 
         let (mut x, mut y) = (0, 0);
 
@@ -68,6 +70,7 @@ impl ScreenBuffer {
             if *c as char == '\n' {
                 y += 1;
                 x = 0;
+                line_count += 1;
                 continue;
             }
 
@@ -93,6 +96,7 @@ impl ScreenBuffer {
             width,
             height,
             cells,
+            line_count,
         }
     }
 
@@ -122,30 +126,6 @@ impl ScreenBuffer {
 
         counter
     }
-
-    pub fn last_char(&self, line: usize) -> usize {
-        let mut counter = 0;
-        for i in self.width * line..self.width * (line + 1) {
-            if self.cells[i].char == ' ' {
-                break;
-            }
-            counter += 1;
-        }
-
-        max(counter as isize - 1, 0) as usize
-    }
-
-    pub fn last_line(&self) -> usize {
-        let mut counter = self.width * self.height - 1;
-        while counter > 0 {
-            if self.cells[counter].char != ' ' {
-                break;
-            }
-            counter -= 1;
-        }
-
-        counter / self.width
-    }
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -162,23 +142,65 @@ pub struct Context {
     pub back_buffer: ScreenBuffer,
     pub file_path: String,
     pub cursor: Cursor,
+    pub prev_cursor: Cursor,
     pub mode: Mode,
-    pub undo_list: Vec<(Cursor, Vec<(usize, usize, char)>)>,
+    pub undo_stack: UndoStack,
 }
 
 impl Context {
-    pub fn new(path: &str) -> Self {
-        let content = fs::read(path).expect("File not found!");
+    pub fn new() -> TiResult<Self> {
+        let path = env::args()
+            .nth(1)
+            .ok_or_else(|| TiError("You need to provide the file path!".to_owned()))?;
+        let content = fs::read(path.to_owned()).expect("File not found!");
         let (width, height) = terminal_size();
 
-        Self {
-            front_buffer: ScreenBuffer::new(width, height),
-            back_buffer: ScreenBuffer::from(&content, width, height),
+        let back_buffer = ScreenBuffer::from(&content, width, height);
+
+        Ok(Self {
+            front_buffer: ScreenBuffer::new(width, height, back_buffer.line_count),
+            back_buffer,
             cursor: Cursor::new(),
+            prev_cursor: Cursor::new(),
             mode: Mode::Undo,
             file_path: path.to_owned(),
-            undo_list: vec![],
+            undo_stack: UndoStack::new(),
+        })
+    }
+
+    pub fn sync_screen_buffers(&mut self) -> Vec<(usize, usize, char)> {
+        let mut diff = Vec::new();
+        let mut undo_delta = Vec::new();
+
+        for i in 0..self.front_buffer.cells.len() {
+            if self.front_buffer.cells[i] != self.back_buffer.cells[i] {
+                let x = i % self.back_buffer.width;
+                let y = i / self.back_buffer.width;
+                diff.push((x, y, self.back_buffer.cells[i].char));
+                undo_delta.push((x, y, self.front_buffer.cells[i].char));
+            }
         }
+
+        if undo_delta.len() > 0 || self.front_buffer.line_count != self.back_buffer.line_count {
+            self.undo_stack.push(
+                self.mode,
+                UndoEntry {
+                    delta: undo_delta,
+                    line_count: self.front_buffer.line_count,
+                    cursor: self.prev_cursor,
+                },
+            );
+        }
+
+        if self.mode == Mode::Undo {
+            self.mode = Mode::Normal
+        }
+
+        self.front_buffer.cells = self.back_buffer.cells.clone();
+        self.front_buffer.line_count = self.back_buffer.line_count;
+        self.prev_cursor = self.cursor;
+
+        diff
     }
 }
 
@@ -192,7 +214,7 @@ pub fn move_block_horizontally(
     if (steps < 0 && x as isize + steps < 0)
         && (steps >= 0 && x + size + steps as usize >= screen.width)
     {
-        return Err(TiError("There is no space to do that action"));
+        return Err(TiError("There is no space to do that action".to_owned()));
     }
 
     let start = y * screen.width + x;
@@ -221,10 +243,14 @@ pub fn move_block_vertically(
     size: usize,
     steps: isize,
 ) -> TiResult<()> {
+    if size == 0 || steps == 0 {
+        return Ok(());
+    }
+
     if (steps < 0 && line as isize + steps < 0)
         || (steps >= 0 && (line + size) as isize >= screen.height as isize - steps)
     {
-        return Err(TiError("There is no space to do that action"));
+        return Err(TiError("There is no space to do that action".to_owned()));
     }
 
     let start = line * screen.width;
@@ -238,10 +264,12 @@ pub fn move_block_vertically(
         for i in max(0, end as isize + steps * screen.width as isize) as usize..end {
             screen.cells[i] = Cell { char: ' ' };
         }
+        screen.line_count -= steps.abs() as usize;
     } else {
         for i in start..((line + max(0, steps as usize)) * screen.width) {
             screen.cells[i] = Cell { char: ' ' };
         }
+        screen.line_count += steps as usize;
     }
 
     Ok(())
@@ -278,20 +306,15 @@ pub fn backspace(screen: &mut ScreenBuffer, cursor: &mut Cursor) -> TiResult<()>
         screen.cells[i] = Cell { char: ' ' };
     }
 
-    if cursor.y < screen.last_line() {
-        move_block_vertically(
-            screen,
-            cursor.y + 2,
-            screen.last_line() - (cursor.y + 1),
-            -1,
-        )?;
+    if cursor.y < screen.line_count {
+        move_block_vertically(screen, cursor.y + 2, screen.line_count - (cursor.y + 1), -1)?;
     }
 
     Ok(())
 }
 pub fn break_line(screen: &mut ScreenBuffer, x: usize, y: usize) -> TiResult<()> {
-    if y < screen.last_line() {
-        move_block_vertically(screen, y + 1, screen.last_line() - y, 1)?;
+    if y < screen.line_count {
+        move_block_vertically(screen, y + 1, screen.line_count - y, 1)?;
     }
 
     let start = y * screen.width + x;
@@ -304,23 +327,4 @@ pub fn break_line(screen: &mut ScreenBuffer, x: usize, y: usize) -> TiResult<()>
     }
 
     Ok(())
-}
-
-pub fn generate_diff(
-    front: &ScreenBuffer,
-    back: &ScreenBuffer,
-) -> (Vec<(usize, usize, char)>, Vec<(usize, usize, char)>) {
-    let mut diff = Vec::new();
-    let mut undo = Vec::new();
-
-    for i in 0..front.cells.len() {
-        if front.cells[i] != back.cells[i] {
-            let x = i % front.width;
-            let y = i / front.width;
-            diff.push((x, y, back.cells[i].char));
-            undo.push((x, y, front.cells[i].char));
-        }
-    }
-
-    (diff, undo)
 }

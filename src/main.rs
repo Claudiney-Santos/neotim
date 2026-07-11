@@ -1,11 +1,5 @@
-use std::{env, process::Command};
-
-use ti::{
-    bindings::*,
-    cursor::Cursor,
-    screen::{Context, Mode, generate_diff},
-    *,
-};
+use std::{panic, process::Command};
+use ti::{bindings::*, screen::Context, *};
 
 pub fn generate_patch(diff: Vec<(usize, usize, char)>) -> String {
     let mut render = String::new();
@@ -28,30 +22,34 @@ pub fn generate_patch(diff: Vec<(usize, usize, char)>) -> String {
 }
 
 fn main() -> anyhow::Result<()> {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        panic!("You need to provide the file path!");
-    }
+    let mut context = Context::new()?;
 
-    let mut context = Context::new(&args[1]);
-    let mut last_cursor = Cursor::new();
+    panic::set_hook(Box::new(|panic_info| {
+        print!("{CLEAR_SCREEN}\x1b[2 q");
+        Command::new("stty").arg("sane").status().unwrap();
+
+        println!("🚨 Fuck! Some shit happened.");
+
+        if let Some(location) = panic_info.location() {
+            println!(
+                "On this file: '{}', line: {}",
+                location.file(),
+                location.line()
+            );
+        }
+
+        if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
+            println!("Panic message: {s}");
+        } else if let Some(s) = panic_info.payload().downcast_ref::<String>() {
+            println!("Panic message: {s}");
+        }
+    }));
 
     Command::new("stty").args(["raw", "-echo"]).status()?;
     print!("{CLEAR_SCREEN}");
 
     loop {
-        let (diff, undo) = generate_diff(&context.front_buffer, &context.back_buffer);
-
-        if undo.len() > 0 && context.mode != Mode::Undo {
-            context.undo_list.push((last_cursor, undo));
-        }
-
-        if context.mode == Mode::Undo {
-            context.mode = Mode::Normal
-        }
-
-        context.front_buffer = context.back_buffer.clone();
-        last_cursor = context.cursor;
+        let diff = context.sync_screen_buffers();
 
         prin!(
             "{}{}",
@@ -59,7 +57,7 @@ fn main() -> anyhow::Result<()> {
             context.cursor.build(&context.back_buffer, context.mode)
         );
 
-        if !process_input(&mut context)? {
+        if !process_input(&mut context).unwrap() {
             break;
         }
     }

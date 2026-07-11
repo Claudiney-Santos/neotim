@@ -1,14 +1,12 @@
 use crate::{
+    BACKSPACE, ENTER, ESC,
+    cursor::y_bounded,
     file,
     screen::{
         Cell, Context, Mode, backspace, break_line, move_block_horizontally, move_block_vertically,
     },
 };
 use std::io::{Read, stdin};
-
-const BACKSPACE: char = '\x7F';
-const ENTER: char = '\r';
-const ESC: char = '\x1b';
 
 pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
     let Context {
@@ -31,14 +29,16 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             cursor.reset(screen, context.mode);
         }
         (Mode::Normal, 'u') => {
-            if let Some((last_cursor, chars)) = context.undo_list.pop() {
-                for (x, y, ch) in chars.iter() {
-                    let idx = y * screen.width + x;
-                    screen.cells[idx].char = *ch;
+            context.undo_stack.pop().map(|mut undo| {
+                undo.delta.reverse();
+                for (x, y, ch) in undo.delta.iter() {
+                    screen.cells[y * screen.width + x].char = *ch;
                 }
-                *cursor = last_cursor;
+                *cursor = undo.cursor;
+                screen.line_count = undo.line_count;
+
                 context.mode = Mode::Undo;
-            }
+            });
         }
         (Mode::Normal, 'I') => {
             context.mode = Mode::Insert;
@@ -61,8 +61,8 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             cursor.right(screen, context.mode);
         }
         (Mode::Normal, 'o') => {
-            if cursor.y < screen.last_line() {
-                move_block_vertically(screen, cursor.y + 1, screen.last_line() - cursor.y, 1)?;
+            if cursor.y < screen.line_count {
+                move_block_vertically(screen, cursor.y + 1, screen.line_count - cursor.y, 1)?;
             }
 
             cursor.x = 0;
@@ -86,19 +86,24 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             cursor.reset(screen, context.mode);
         }
         (Mode::Delete, 'd') => {
-            move_block_vertically(screen, cursor.y + 1, screen.last_line() - cursor.y, -1)?;
+            move_block_vertically(screen, cursor.y + 1, screen.line_count - cursor.y, -1)?;
 
             context.mode = Mode::Normal;
             cursor.reset(screen, context.mode);
         }
         (Mode::Delete, 'j') => {
-            move_block_vertically(screen, cursor.y + 2, screen.last_line() - cursor.y - 1, -2)?;
+            move_block_vertically(
+                screen,
+                y_bounded(cursor.y as isize + 2, screen),
+                screen.line_count - cursor.y - 1,
+                -2,
+            )?;
 
             context.mode = Mode::Normal;
             cursor.reset(screen, context.mode);
         }
         (Mode::Delete, 'k') => {
-            move_block_vertically(screen, cursor.y + 1, screen.last_line() - cursor.y - 1, -2)?;
+            move_block_vertically(screen, cursor.y + 1, screen.line_count - cursor.y - 1, -2)?;
 
             context.mode = Mode::Normal;
             cursor.y -= 1;
@@ -122,7 +127,7 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             cursor.x = 0;
         }
         (Mode::Normal, 'G') => {
-            cursor.y = screen.last_line();
+            cursor.y = screen.line_count - 1;
             cursor.go_to_line_end(screen, context.mode);
         }
         (Mode::Normal, ENTER) => {

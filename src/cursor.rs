@@ -2,7 +2,7 @@ use std::cmp::{max, min};
 
 use crate::screen::{Mode, ScreenBuffer};
 
-pub const CURSOR_BLOCK: usize = 2;
+const CURSOR_BLOCK: usize = 2;
 const CURSOR_UNDERLINE: usize = 4;
 const CURSOR_BAR: usize = 6;
 

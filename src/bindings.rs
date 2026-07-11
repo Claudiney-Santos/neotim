@@ -81,6 +81,12 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         (Mode::Normal, 'r') => {
             context.mode = Mode::Replace;
         }
+        (Mode::Normal, 'x') => {
+            if screen.line_len(cursor.y) > 0 {
+                cursor.right(screen, Mode::Insert);
+                backspace(screen, cursor)?;
+            }
+        }
         (Mode::Insert, ESC) => {
             context.mode = Mode::Normal;
             cursor.reset(screen, context.mode);

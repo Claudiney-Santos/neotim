@@ -1,6 +1,6 @@
 # Ti
 
-Toy text editor
+Toy vim like text editor
 
 ## Next Steps
 - [X] Implement Enter

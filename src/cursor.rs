@@ -126,7 +126,11 @@ impl Cursor {
     }
 
     pub fn go_to_prev_word(&mut self, screen: &ScreenBuffer) {
-        let mut idx = self.y * screen.width + self.x;
+        let idx = self.y * screen.width + self.x;
+
+        if idx == 0 {
+            return;
+        }
 
         enum State {
             Alphabetic,
@@ -140,14 +144,16 @@ impl Cursor {
             _ => State::NonAlphabetic,
         };
 
+        let mut step = idx;
+
         for (i, c) in screen.cells.iter().take(idx - 1).rev().enumerate() {
             match (&state, c.char) {
                 (State::Alphabetic, c) if !c.is_alphanumeric() => {
-                    idx -= i + 1;
+                    step = i + 1;
                     break;
                 }
                 (State::NonAlphabetic, c) if c.is_alphanumeric() || is_whitespace(c) => {
-                    idx -= i + 1;
+                    step = i + 1;
                     break;
                 }
                 (State::WhiteSpace, c) if !is_whitespace(c) => {
@@ -161,12 +167,12 @@ impl Cursor {
             }
         }
 
-        self.x = idx % screen.width;
-        self.y = idx / screen.width;
+        self.x = (idx - step) % screen.width;
+        self.y = (idx - step) / screen.width;
     }
 
     pub fn go_to_last_char_of_next_word(&mut self, screen: &ScreenBuffer) {
-        let mut idx = self.y * screen.width + self.x;
+        let idx = self.y * screen.width + self.x;
 
         enum State {
             Alphabetic,
@@ -180,14 +186,16 @@ impl Cursor {
             _ => State::NonAlphabetic,
         };
 
+        let mut step = idx;
+
         for (i, c) in screen.cells.iter().skip(idx + 1).enumerate() {
             match (&state, c.char) {
                 (State::Alphabetic, c) if !c.is_alphanumeric() => {
-                    idx += i;
+                    step = i;
                     break;
                 }
                 (State::NonAlphabetic, c) if c.is_alphanumeric() || is_whitespace(c) => {
-                    idx += i;
+                    step = i;
                     break;
                 }
                 (State::WhiteSpace, c) if !is_whitespace(c) => {
@@ -201,8 +209,8 @@ impl Cursor {
             }
         }
 
-        self.x = idx % screen.width;
-        self.y = idx / screen.width;
+        self.x = (idx + step) % screen.width;
+        self.y = (idx + step) / screen.width;
     }
 }
 

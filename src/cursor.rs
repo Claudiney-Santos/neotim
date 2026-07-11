@@ -2,7 +2,7 @@ use std::cmp::{max, min};
 
 use crate::screen::{Mode, ScreenBuffer};
 
-const CURSOR_BLOCK: usize = 2;
+pub const CURSOR_BLOCK: usize = 2;
 const CURSOR_UNDERLINE: usize = 4;
 const CURSOR_BAR: usize = 6;
 
@@ -222,6 +222,6 @@ pub fn x_bounded(x: isize, y: usize, screen: &ScreenBuffer, mode: Mode) -> usize
     max(min(bound as isize, x), 0) as usize
 }
 
-fn y_bounded(y: isize, screen: &ScreenBuffer) -> usize {
+pub fn y_bounded(y: isize, screen: &ScreenBuffer) -> usize {
     max(min(screen.line_count as isize - 1, y), 0) as usize
 }

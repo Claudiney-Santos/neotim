@@ -1,5 +1,7 @@
 use crate::{
-    BACKSPACE, ENTER, ESC, file,
+    BACKSPACE, ENTER, ESC,
+    cursor::y_bounded,
+    file,
     screen::{
         Cell, Context, Mode, backspace, break_line, move_block_horizontally, move_block_vertically,
     },
@@ -88,7 +90,12 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             cursor.reset(screen, context.mode);
         }
         (Mode::Delete, 'j') => {
-            move_block_vertically(screen, cursor.y + 2, screen.line_count - cursor.y - 1, -2)?;
+            move_block_vertically(
+                screen,
+                y_bounded(cursor.y as isize + 2, screen),
+                screen.line_count - cursor.y - 1,
+                -2,
+            )?;
 
             context.mode = Mode::Normal;
             cursor.reset(screen, context.mode);

@@ -234,6 +234,10 @@ pub fn move_block_vertically(
     size: usize,
     steps: isize,
 ) -> TiResult<()> {
+    if size == 0 || steps == 0 {
+        return Ok(());
+    }
+
     if (steps < 0 && line as isize + steps < 0)
         || (steps >= 0 && (line + size) as isize >= screen.height as isize - steps)
     {

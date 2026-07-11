@@ -4,7 +4,7 @@ const UNDO_STACK_SIZE: usize = 10;
 
 pub struct UndoEntry {
     pub delta: Vec<(usize, usize, char)>,
-    pub cursor_pos: Cursor,
+    pub cursor: Cursor,
     pub line_count: usize,
 }
 
@@ -22,19 +22,14 @@ impl UndoStack {
     }
 
     pub fn push(&mut self, mode: Mode, mut entry: UndoEntry) {
+        if mode == Mode::Undo || entry.delta.last().is_none() {
+            return;
+        }
+
         if let (Mode::Insert, Mode::Insert, Some(undo)) =
             (mode, self.last_mode, self.undos.last_mut())
         {
             undo.delta.append(&mut entry.delta);
-            return;
-        }
-
-        if let (None, Some(true)) = (
-            entry.delta.last(),
-            self.undos
-                .last()
-                .map(|last| last.line_count == entry.line_count),
-        ) {
             return;
         }
 

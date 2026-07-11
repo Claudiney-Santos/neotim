@@ -29,14 +29,16 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             cursor.reset(screen, context.mode);
         }
         (Mode::Normal, 'u') => {
-            if let Some((last_cursor, chars)) = context.undo_list.pop() {
-                for (x, y, ch) in chars.iter() {
-                    let idx = y * screen.width + x;
-                    screen.cells[idx].char = *ch;
+            context.undo_stack.pop().map(|mut undo| {
+                undo.delta.reverse();
+                for (x, y, ch) in undo.delta.iter() {
+                    screen.cells[y * screen.width + x].char = *ch;
                 }
-                *cursor = last_cursor;
+                *cursor = undo.cursor;
+                screen.line_count = undo.line_count;
+
                 context.mode = Mode::Undo;
-            }
+            });
         }
         (Mode::Normal, 'I') => {
             context.mode = Mode::Insert;

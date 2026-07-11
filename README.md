@@ -14,7 +14,10 @@ Toy text editor
 - [X] Fix breakline
 - [X] Fix 'a' command on empty line
 - [X] Refactor main loop
-- [ ] Implement last line tracker
+- [X] Implement last line tracker
+- [X] Implement new undo to handle line tracker
+- [X] Improve error handling
+- [ ] Solve b command bug
 - [ ] Implement x command
 - [ ] Implement visual mode
 - [ ] Implement virtual screen matrix

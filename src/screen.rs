@@ -1,6 +1,7 @@
 use crate::{
     cursor::Cursor,
     error::{TiError, TiResult},
+    undo::{UndoEntry, UndoStack},
 };
 use std::{cmp::max, env, fs, process::exit};
 
@@ -46,14 +47,12 @@ pub struct ScreenBuffer {
 }
 
 impl ScreenBuffer {
-    pub fn new(width: usize, height: usize) -> Self {
-        let cells = vec![Cell { char: ' ' }; width * height];
-
+    pub fn new(width: usize, height: usize, line_count: usize) -> Self {
         Self {
             width,
             height,
-            cells,
-            line_count: 0,
+            cells: vec![Cell { char: ' ' }; width * height],
+            line_count,
         }
     }
 
@@ -139,13 +138,13 @@ pub enum Mode {
 }
 
 pub struct Context {
-    pub front_buffer: Vec<Cell>,
+    pub front_buffer: ScreenBuffer,
     pub back_buffer: ScreenBuffer,
     pub file_path: String,
     pub cursor: Cursor,
     pub prev_cursor: Cursor,
     pub mode: Mode,
-    pub undo_list: Vec<(Cursor, Vec<(usize, usize, char)>)>,
+    pub undo_stack: UndoStack,
 }
 
 impl Context {
@@ -156,39 +155,49 @@ impl Context {
         let content = fs::read(path.to_owned()).expect("File not found!");
         let (width, height) = terminal_size();
 
+        let back_buffer = ScreenBuffer::from(&content, width, height);
+
         Ok(Self {
-            front_buffer: vec![Cell { char: ' ' }; width * height],
-            back_buffer: ScreenBuffer::from(&content, width, height),
+            front_buffer: ScreenBuffer::new(width, height, back_buffer.line_count),
+            back_buffer,
             cursor: Cursor::new(),
             prev_cursor: Cursor::new(),
             mode: Mode::Undo,
             file_path: path.to_owned(),
-            undo_list: vec![],
+            undo_stack: UndoStack::new(),
         })
     }
 
     pub fn sync_screen_buffers(&mut self) -> Vec<(usize, usize, char)> {
         let mut diff = Vec::new();
-        let mut undo = Vec::new();
+        let mut undo_delta = Vec::new();
 
-        for i in 0..self.front_buffer.len() {
-            if self.front_buffer[i] != self.back_buffer.cells[i] {
+        for i in 0..self.front_buffer.cells.len() {
+            if self.front_buffer.cells[i] != self.back_buffer.cells[i] {
                 let x = i % self.back_buffer.width;
                 let y = i / self.back_buffer.width;
                 diff.push((x, y, self.back_buffer.cells[i].char));
-                undo.push((x, y, self.front_buffer[i].char));
+                undo_delta.push((x, y, self.front_buffer.cells[i].char));
             }
         }
 
-        if undo.len() > 0 && self.mode != Mode::Undo {
-            self.undo_list.push((self.prev_cursor, undo));
+        if undo_delta.len() > 0 || self.front_buffer.line_count != self.back_buffer.line_count {
+            self.undo_stack.push(
+                self.mode,
+                UndoEntry {
+                    delta: undo_delta,
+                    line_count: self.front_buffer.line_count,
+                    cursor: self.prev_cursor,
+                },
+            );
         }
 
         if self.mode == Mode::Undo {
             self.mode = Mode::Normal
         }
 
-        self.front_buffer = self.back_buffer.cells.clone();
+        self.front_buffer.cells = self.back_buffer.cells.clone();
+        self.front_buffer.line_count = self.back_buffer.line_count;
         self.prev_cursor = self.cursor;
 
         diff

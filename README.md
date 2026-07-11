@@ -17,7 +17,7 @@ Toy text editor
 - [X] Implement last line tracker
 - [X] Implement new undo to handle line tracker
 - [X] Improve error handling
-- [ ] Solve b command bug
+- [X] Solve b command bug
 - [ ] Implement x command
 - [ ] Implement visual mode
 - [ ] Implement virtual screen matrix

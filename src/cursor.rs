@@ -28,6 +28,7 @@ impl Cursor {
 
         let mode = match mode {
             Mode::Normal => CURSOR_BLOCK,
+            Mode::Visual(_) => CURSOR_BLOCK,
             Mode::Undo => CURSOR_BLOCK,
             Mode::Replace => CURSOR_UNDERLINE,
             Mode::Delete => CURSOR_UNDERLINE,

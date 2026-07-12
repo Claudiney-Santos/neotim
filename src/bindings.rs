@@ -20,10 +20,10 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
     match (mode, key) {
         (Mode::Normal, 'Q') => return Ok(false),
         (Mode::Normal, 'W') => file::save(file_path, screen)?,
-        (Mode::Normal, 'h') => cursor.left(screen, context.mode),
-        (Mode::Normal, 'j') => cursor.down(screen),
-        (Mode::Normal, 'k') => cursor.up(screen),
-        (Mode::Normal, 'l') => cursor.right(screen, context.mode),
+        (Mode::Normal | Mode::Visual(_), 'h') => cursor.left(screen, context.mode),
+        (Mode::Normal | Mode::Visual(_), 'j') => cursor.down(screen),
+        (Mode::Normal | Mode::Visual(_), 'k') => cursor.up(screen),
+        (Mode::Normal | Mode::Visual(_), 'l') => cursor.right(screen, context.mode),
         (Mode::Normal, 'i') => {
             context.mode = Mode::Insert;
             cursor.reset(screen, context.mode);
@@ -31,8 +31,8 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         (Mode::Normal, 'u') => {
             context.undo_stack.pop().map(|mut undo| {
                 undo.delta.reverse();
-                for (x, y, ch) in undo.delta.iter() {
-                    screen.cells[y * screen.width + x].char = *ch;
+                for (x, y, cell) in undo.delta.iter() {
+                    screen.cells[y * screen.width + x] = *cell;
                 }
                 *cursor = undo.cursor;
                 screen.line_count = undo.line_count;
@@ -87,7 +87,10 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
                 backspace(screen, cursor)?;
             }
         }
-        (Mode::Insert, ESC) => {
+        (Mode::Normal, 'v') => {
+            context.mode = Mode::Visual(cursor.y * screen.width + cursor.x);
+        }
+        (Mode::Insert | Mode::Visual(_), ESC) => {
             context.mode = Mode::Normal;
             cursor.reset(screen, context.mode);
         }

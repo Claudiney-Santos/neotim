@@ -100,21 +100,6 @@ impl ScreenBuffer {
         }
     }
 
-    pub fn print(&self) {
-        for cell in self.cells.iter() {
-            if cell.char == '\n' {
-                print!("\r");
-            }
-
-            if cell.char == '·' {
-                print!("\x1b[90m·\x1b[0m");
-                continue;
-            }
-
-            print!("{}", cell.char);
-        }
-    }
-
     pub fn line_len(&self, line: usize) -> usize {
         let mut counter = 0;
         for i in self.width * line..self.width * (line + 1) {
@@ -134,6 +119,7 @@ pub enum Mode {
     Replace,
     Delete,
     Insert,
+    Visual(usize),
     Undo,
 }
 
@@ -168,7 +154,7 @@ impl Context {
         })
     }
 
-    pub fn sync_screen_buffers(&mut self) -> Vec<(usize, usize, char)> {
+    pub fn sync_screen_buffers(&mut self) -> Vec<(usize, usize, Cell)> {
         let mut diff = Vec::new();
         let mut undo_delta = Vec::new();
 
@@ -176,8 +162,8 @@ impl Context {
             if self.front_buffer.cells[i] != self.back_buffer.cells[i] {
                 let x = i % self.back_buffer.width;
                 let y = i / self.back_buffer.width;
-                diff.push((x, y, self.back_buffer.cells[i].char));
-                undo_delta.push((x, y, self.front_buffer.cells[i].char));
+                diff.push((x, y, self.back_buffer.cells[i]));
+                undo_delta.push((x, y, self.front_buffer.cells[i]));
             }
         }
 

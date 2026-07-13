@@ -187,7 +187,9 @@ impl Cursor {
             _ => State::NonAlphabetic,
         };
 
-        let mut step = idx;
+        let mut step = 0;
+
+        let eof = (screen.line_count - 1) * screen.width + screen.line_len(screen.line_count - 1);
 
         for (i, c) in screen.cells.iter().skip(idx + 1).enumerate() {
             match (&state, c.char) {
@@ -206,6 +208,7 @@ impl Cursor {
                         state = State::NonAlphabetic;
                     }
                 }
+                _ if i >= eof => break,
                 _ => {}
             }
         }

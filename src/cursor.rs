@@ -7,6 +7,29 @@ const CURSOR_UNDERLINE: usize = 4;
 const CURSOR_BAR: usize = 6;
 
 #[derive(Copy, Clone)]
+pub struct Pos {
+    pub x: usize,
+    pub y: usize,
+}
+
+impl Pos {
+    pub fn new(x: usize, y: usize) -> Self {
+        Self { x, y }
+    }
+
+    pub fn to_raw(&self, width: usize) -> usize {
+        self.y * width + self.x
+    }
+
+    pub fn from_raw(raw_idx: usize, width: usize) -> Self {
+        Self {
+            x: raw_idx % width,
+            y: raw_idx / width,
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
 pub struct Cursor {
     pub x: usize,
     pub y: usize,

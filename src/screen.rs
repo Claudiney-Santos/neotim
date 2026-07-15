@@ -229,6 +229,7 @@ impl Context {
                 let x = i % self.back_buffer.width;
                 let y = i / self.back_buffer.width;
                 diff.push((x, y, self.back_buffer.cells[i]));
+                self.front_buffer.cells[i].highlight = false;
                 undo_delta.push((x, y, self.front_buffer.cells[i]));
             }
         }
@@ -364,6 +365,7 @@ pub fn backspace(screen: &mut ScreenBuffer, cursor: &mut Cursor) -> TiResult<()>
 
     Ok(())
 }
+
 pub fn break_line(screen: &mut ScreenBuffer, x: usize, y: usize) -> TiResult<()> {
     if y < screen.line_count {
         move_block_vertically(screen, y + 1, screen.line_count - y, 1)?;
@@ -379,4 +381,65 @@ pub fn break_line(screen: &mut ScreenBuffer, x: usize, y: usize) -> TiResult<()>
     }
 
     Ok(())
+}
+
+pub fn copy(screen: &mut ScreenBuffer, start: usize, end: usize) -> String {
+    let mut result = String::new();
+
+    assert!(start <= end, "start is greater than end!");
+    assert!(
+        start < screen.cells.len(),
+        "start is greater screen matrix length!"
+    );
+    assert!(
+        end < screen.cells.len(),
+        "end is greater screen matrix length!"
+    );
+
+    for i in start..end {
+        result.push(screen.cells[i].char);
+    }
+
+    result
+}
+
+pub fn cut(screen: &mut ScreenBuffer, start: usize, end: usize) -> String {
+    let mut result = String::new();
+
+    assert!(start <= end, "start is greater than end!");
+    assert!(
+        start < screen.cells.len(),
+        "start is greater screen matrix length!"
+    );
+    assert!(
+        end < screen.cells.len(),
+        "end is greater screen matrix length!"
+    );
+
+    for i in start..end {
+        result.push(screen.cells[i].char);
+        screen.cells[i] = Cell::new(' ');
+    }
+
+    result
+}
+
+// This paste the String until the end of current line
+pub fn paste(screen: &mut ScreenBuffer, pos: usize, content: String) {
+    assert!(
+        pos < screen.cells.len(),
+        "end is greater screen matrix length!"
+    );
+
+    let start = pos;
+    let end = min(
+        pos + screen.width - (pos % screen.width),
+        start + content.len(),
+    );
+
+    let content = content.chars().collect::<Vec<char>>();
+
+    for i in start..end {
+        screen.cells[i].char = content[i - start];
+    }
 }

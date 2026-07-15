@@ -1,9 +1,10 @@
 use crate::{
     BACKSPACE, ENTER, ESC,
-    cursor::y_bounded,
+    cursor::{Pos, y_bounded},
     file,
     screen::{
-        Cell, Context, Mode, backspace, break_line, move_block_horizontally, move_block_vertically,
+        Cell, Context, Mode, backspace, break_line, cut, move_block_horizontally,
+        move_block_vertically, paste,
     },
 };
 use std::{
@@ -108,6 +109,35 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             context.mode = Mode::Normal;
             cursor.reset(screen, context.mode);
         }
+        (Mode::Visual(landmark), 'd') => {
+            let cursor_raw = cursor.y * screen.width + cursor.x;
+            let start = min(*landmark, cursor_raw);
+            let end = max(*landmark, cursor_raw);
+
+            for i in start..end {
+                screen.cells[i].highlight = false;
+            }
+
+            let content = cut(screen, end + 1, end + screen.width - (end % screen.width));
+            paste(screen, start, content);
+
+            let start = Pos::from_raw(start, screen.width);
+            let end = Pos::from_raw(end, screen.width);
+
+            move_block_vertically(
+                screen,
+                end.y + 1,
+                screen.line_count - end.y,
+                start.y as isize - end.y as isize,
+            )?;
+
+            cursor.x = start.x;
+            cursor.y = start.y;
+            context.prev_cursor.x = start.x;
+            context.prev_cursor.y = start.y;
+            context.mode = Mode::Normal;
+            cursor.reset(screen, context.mode);
+        }
         (Mode::Delete, 'd') => {
             move_block_vertically(screen, cursor.y + 1, screen.line_count - cursor.y, -1)?;
 
@@ -138,7 +168,7 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         (Mode::Normal, 'd') => {
             context.mode = Mode::Delete;
         }
-        (Mode::Normal | Mode::Visual(_), 'g') => {
+        (Mode::Normal, 'g') => {
             let mut k = [0; 1];
             stdin().read_exact(&mut k)?;
 

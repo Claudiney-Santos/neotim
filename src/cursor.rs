@@ -29,6 +29,12 @@ impl Pos {
     }
 }
 
+impl From<Pos> for Cursor {
+    fn from(b: Pos) -> Self {
+        Self { x: b.x, y: b.y }
+    }
+}
+
 #[derive(Copy, Clone)]
 pub struct Cursor {
     pub x: usize,

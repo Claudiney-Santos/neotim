@@ -109,6 +109,30 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             context.mode = Mode::Normal;
             cursor.reset(screen, context.mode);
         }
+        (Mode::Visual(landmark), 'D') => {
+            let cursor_raw = cursor.y * screen.width + cursor.x;
+            let start = min(*landmark, cursor_raw);
+            let end = max(*landmark, cursor_raw);
+
+            for i in start..end {
+                screen.cells[i].highlight = false;
+            }
+
+            let start = Pos::from_raw(start, screen.width);
+            let end = Pos::from_raw(end, screen.width);
+
+            move_block_vertically(
+                screen,
+                end.y + 1,
+                screen.line_count - (end.y + 1),
+                start.y as isize - (end.y as isize + 1),
+            )?;
+
+            *cursor = start.into();
+            context.prev_cursor = start.into();
+            context.mode = Mode::Normal;
+            cursor.reset(screen, context.mode);
+        }
         (Mode::Visual(landmark), 'd') => {
             let cursor_raw = cursor.y * screen.width + cursor.x;
             let start = min(*landmark, cursor_raw);
@@ -131,10 +155,8 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
                 start.y as isize - end.y as isize,
             )?;
 
-            cursor.x = start.x;
-            cursor.y = start.y;
-            context.prev_cursor.x = start.x;
-            context.prev_cursor.y = start.y;
+            *cursor = start.into();
+            context.prev_cursor = start.into();
             context.mode = Mode::Normal;
             cursor.reset(screen, context.mode);
         }

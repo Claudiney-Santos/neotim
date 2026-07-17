@@ -1,9 +1,13 @@
 use crate::{
-    cursor::Cursor,
+    cursor::{Cursor, x_bounded},
     error::{TiError, TiResult},
     undo::{UndoEntry, UndoStack},
 };
-use std::{cmp::max, env, fs, process::exit};
+use std::{
+    cmp::{max, min},
+    env, fs,
+    process::exit,
+};
 
 #[repr(C)]
 struct WinSize {
@@ -36,6 +40,16 @@ fn terminal_size() -> (usize, usize) {
 #[derive(Clone, PartialEq, Copy, Debug)]
 pub struct Cell {
     pub char: char,
+    pub highlight: bool,
+}
+
+impl Cell {
+    pub fn new(char: char) -> Self {
+        Self {
+            char,
+            highlight: false,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -51,13 +65,25 @@ impl ScreenBuffer {
         Self {
             width,
             height,
-            cells: vec![Cell { char: ' ' }; width * height],
+            cells: vec![
+                Cell {
+                    char: ' ',
+                    highlight: false
+                };
+                width * height
+            ],
             line_count,
         }
     }
 
     pub fn from(content: &Vec<u8>, width: usize, height: usize) -> Self {
-        let mut cells = vec![Cell { char: ' ' }; width * height];
+        let mut cells = vec![
+            Cell {
+                char: ' ',
+                highlight: false
+            };
+            width * height
+        ];
         let mut line_count = 0;
 
         let (mut x, mut y) = (0, 0);
@@ -83,12 +109,15 @@ impl ScreenBuffer {
             }
 
             if *c as char == ' ' {
-                cells[y * width + x] = Cell { char: '·' };
+                cells[y * width + x] = Cell::new('·');
                 x += 1;
                 continue;
             }
 
-            cells[y * width + x] = Cell { char: *c as char };
+            cells[y * width + x] = Cell {
+                char: *c as char,
+                highlight: false,
+            };
             x += 1;
         }
 
@@ -100,18 +129,37 @@ impl ScreenBuffer {
         }
     }
 
-    pub fn print(&self) {
-        for cell in self.cells.iter() {
-            if cell.char == '\n' {
-                print!("\r");
+    pub fn set_highlighted_cells(&mut self, cursor: Cursor, prev_cursor: Cursor, mode: Mode) {
+        if let Mode::Visual(landmark) = mode {
+            let cursor_idx = cursor.y * self.width + cursor.x;
+            let prev_cursor_idx = prev_cursor.y * self.width + prev_cursor.x;
+
+            let start = min(landmark, cursor_idx);
+            let end = max(landmark, cursor_idx);
+
+            for i in start..end {
+                let actual_x = i % self.width;
+                let x_bounded = x_bounded(
+                    (i % self.width) as isize,
+                    i / self.width,
+                    self,
+                    Mode::Normal,
+                );
+
+                if actual_x <= x_bounded {
+                    self.cells[i].highlight = true;
+                }
             }
 
-            if cell.char == '·' {
-                print!("\x1b[90m·\x1b[0m");
-                continue;
+            if prev_cursor_idx < start {
+                for i in prev_cursor_idx..start {
+                    self.cells[i].highlight = false;
+                }
+            } else if prev_cursor_idx > end {
+                for i in end..prev_cursor_idx {
+                    self.cells[i].highlight = false;
+                }
             }
-
-            print!("{}", cell.char);
         }
     }
 
@@ -134,6 +182,7 @@ pub enum Mode {
     Replace,
     Delete,
     Insert,
+    Visual(usize),
     Undo,
 }
 
@@ -168,16 +217,20 @@ impl Context {
         })
     }
 
-    pub fn sync_screen_buffers(&mut self) -> Vec<(usize, usize, char)> {
+    pub fn sync_screen_buffers(&mut self) -> Vec<(usize, usize, Cell)> {
         let mut diff = Vec::new();
         let mut undo_delta = Vec::new();
+
+        self.back_buffer
+            .set_highlighted_cells(self.cursor, self.prev_cursor, self.mode);
 
         for i in 0..self.front_buffer.cells.len() {
             if self.front_buffer.cells[i] != self.back_buffer.cells[i] {
                 let x = i % self.back_buffer.width;
                 let y = i / self.back_buffer.width;
-                diff.push((x, y, self.back_buffer.cells[i].char));
-                undo_delta.push((x, y, self.front_buffer.cells[i].char));
+                diff.push((x, y, self.back_buffer.cells[i]));
+                self.front_buffer.cells[i].highlight = false;
+                undo_delta.push((x, y, self.front_buffer.cells[i]));
             }
         }
 
@@ -226,11 +279,11 @@ pub fn move_block_horizontally(
 
     if steps >= 0 {
         for i in start..start + steps as usize {
-            screen.cells[i] = Cell { char: '·' };
+            screen.cells[i] = Cell::new('·');
         }
     } else {
         for i in max(0, end as isize + steps) as usize..end {
-            screen.cells[i] = Cell { char: ' ' };
+            screen.cells[i] = Cell::new(' ');
         }
     }
 
@@ -262,12 +315,12 @@ pub fn move_block_vertically(
 
     if steps < 0 {
         for i in max(0, end as isize + steps * screen.width as isize) as usize..end {
-            screen.cells[i] = Cell { char: ' ' };
+            screen.cells[i] = Cell::new(' ');
         }
         screen.line_count -= steps.abs() as usize;
     } else {
         for i in start..((line + max(0, steps as usize)) * screen.width) {
-            screen.cells[i] = Cell { char: ' ' };
+            screen.cells[i] = Cell::new(' ');
         }
         screen.line_count += steps as usize;
     }
@@ -303,7 +356,7 @@ pub fn backspace(screen: &mut ScreenBuffer, cursor: &mut Cursor) -> TiResult<()>
     screen.cells.copy_within(start..end, dest);
 
     for i in start..end {
-        screen.cells[i] = Cell { char: ' ' };
+        screen.cells[i] = Cell::new(' ');
     }
 
     if cursor.y < screen.line_count {
@@ -312,6 +365,7 @@ pub fn backspace(screen: &mut ScreenBuffer, cursor: &mut Cursor) -> TiResult<()>
 
     Ok(())
 }
+
 pub fn break_line(screen: &mut ScreenBuffer, x: usize, y: usize) -> TiResult<()> {
     if y < screen.line_count {
         move_block_vertically(screen, y + 1, screen.line_count - y, 1)?;
@@ -323,8 +377,69 @@ pub fn break_line(screen: &mut ScreenBuffer, x: usize, y: usize) -> TiResult<()>
     screen.cells.copy_within(start..end, (y + 1) * screen.width);
 
     for i in start..end {
-        screen.cells[i] = Cell { char: ' ' };
+        screen.cells[i] = Cell::new(' ');
     }
 
     Ok(())
+}
+
+pub fn copy(screen: &mut ScreenBuffer, start: usize, end: usize) -> String {
+    let mut result = String::new();
+
+    assert!(start <= end, "start is greater than end!");
+    assert!(
+        start < screen.cells.len(),
+        "start is greater screen matrix length!"
+    );
+    assert!(
+        end < screen.cells.len(),
+        "end is greater screen matrix length!"
+    );
+
+    for i in start..end {
+        result.push(screen.cells[i].char);
+    }
+
+    result
+}
+
+pub fn cut(screen: &mut ScreenBuffer, start: usize, end: usize) -> String {
+    let mut result = String::new();
+
+    assert!(start <= end, "start is greater than end!");
+    assert!(
+        start < screen.cells.len(),
+        "start is greater screen matrix length!"
+    );
+    assert!(
+        end < screen.cells.len(),
+        "end is greater screen matrix length!"
+    );
+
+    for i in start..end {
+        result.push(screen.cells[i].char);
+        screen.cells[i] = Cell::new(' ');
+    }
+
+    result
+}
+
+// This paste the String until the end of current line
+pub fn paste(screen: &mut ScreenBuffer, pos: usize, content: String) {
+    assert!(
+        pos < screen.cells.len(),
+        "end is greater screen matrix length!"
+    );
+
+    let start = pos;
+    let end = min(
+        pos + screen.width - (pos % screen.width),
+        start + content.len(),
+    );
+
+    let content = content.chars().collect::<Vec<char>>();
+
+    for i in start..end {
+        screen.cells[i].char = content[i - start];
+    }
 }

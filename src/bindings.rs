@@ -1,12 +1,16 @@
 use crate::{
     BACKSPACE, ENTER, ESC,
-    cursor::y_bounded,
+    cursor::{Pos, y_bounded},
     file,
     screen::{
-        Cell, Context, Mode, backspace, break_line, move_block_horizontally, move_block_vertically,
+        Cell, Context, Mode, backspace, break_line, cut, move_block_horizontally,
+        move_block_vertically, paste,
     },
 };
-use std::io::{Read, stdin};
+use std::{
+    cmp::{max, min},
+    io::{Read, stdin},
+};
 
 pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
     let Context {
@@ -18,12 +22,12 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
     } = context;
 
     match (mode, key) {
-        (Mode::Normal, 'Q') => return Ok(false),
-        (Mode::Normal, 'W') => file::save(file_path, screen)?,
-        (Mode::Normal, 'h') => cursor.left(screen, context.mode),
-        (Mode::Normal, 'j') => cursor.down(screen),
-        (Mode::Normal, 'k') => cursor.up(screen),
-        (Mode::Normal, 'l') => cursor.right(screen, context.mode),
+        (Mode::Normal | Mode::Visual(_), 'Q') => return Ok(false),
+        (Mode::Normal | Mode::Visual(_), 'W') => file::save(file_path, screen)?,
+        (Mode::Normal | Mode::Visual(_), 'h') => cursor.left(screen, context.mode),
+        (Mode::Normal | Mode::Visual(_), 'j') => cursor.down(screen),
+        (Mode::Normal | Mode::Visual(_), 'k') => cursor.up(screen),
+        (Mode::Normal | Mode::Visual(_), 'l') => cursor.right(screen, context.mode),
         (Mode::Normal, 'i') => {
             context.mode = Mode::Insert;
             cursor.reset(screen, context.mode);
@@ -31,8 +35,8 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
         (Mode::Normal, 'u') => {
             context.undo_stack.pop().map(|mut undo| {
                 undo.delta.reverse();
-                for (x, y, ch) in undo.delta.iter() {
-                    screen.cells[y * screen.width + x].char = *ch;
+                for (x, y, cell) in undo.delta.iter() {
+                    screen.cells[y * screen.width + x] = *cell;
                 }
                 *cursor = undo.cursor;
                 screen.line_count = undo.line_count;
@@ -44,9 +48,9 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             context.mode = Mode::Insert;
             cursor.go_to_line_start(screen);
         }
-        (Mode::Normal, 'w') => cursor.go_to_next_word(screen),
-        (Mode::Normal, 'b') => cursor.go_to_prev_word(screen),
-        (Mode::Normal, 'e') => cursor.go_to_last_char_of_next_word(screen),
+        (Mode::Normal | Mode::Visual(_), 'w') => cursor.go_to_next_word(screen),
+        (Mode::Normal | Mode::Visual(_), 'b') => cursor.go_to_prev_word(screen),
+        (Mode::Normal | Mode::Visual(_), 'e') => cursor.go_to_last_char_of_next_word(screen),
         (Mode::Normal, 'A') => {
             context.mode = Mode::Insert;
             cursor.go_to_line_end(screen, context.mode);
@@ -73,7 +77,7 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             let i = cursor.y * screen.width + cursor.x;
 
             if !char.is_control() {
-                screen.cells[i] = Cell { char: key };
+                screen.cells[i] = Cell::new(key);
             }
 
             context.mode = Mode::Normal;
@@ -87,7 +91,72 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
                 backspace(screen, cursor)?;
             }
         }
+        (Mode::Normal, 'v') => {
+            context.mode = Mode::Visual(cursor.y * screen.width + cursor.x);
+        }
+        (Mode::Visual(landmark), ESC) => {
+            let idx = cursor.y * screen.width + cursor.x;
+            let start = min(idx, *landmark);
+            let end = max(idx, *landmark);
+
+            for i in start..end {
+                screen.cells[i].highlight = false;
+            }
+            context.mode = Mode::Normal;
+            cursor.reset(screen, context.mode);
+        }
         (Mode::Insert, ESC) => {
+            context.mode = Mode::Normal;
+            cursor.reset(screen, context.mode);
+        }
+        (Mode::Visual(landmark), 'D') => {
+            let cursor_raw = cursor.y * screen.width + cursor.x;
+            let start = min(*landmark, cursor_raw);
+            let end = max(*landmark, cursor_raw);
+
+            for i in start..end {
+                screen.cells[i].highlight = false;
+            }
+
+            let start = Pos::from_raw(start, screen.width);
+            let end = Pos::from_raw(end, screen.width);
+
+            move_block_vertically(
+                screen,
+                end.y + 1,
+                screen.line_count - (end.y + 1),
+                start.y as isize - (end.y as isize + 1),
+            )?;
+
+            *cursor = start.into();
+            context.prev_cursor = start.into();
+            context.mode = Mode::Normal;
+            cursor.reset(screen, context.mode);
+        }
+        (Mode::Visual(landmark), 'd') => {
+            let cursor_raw = cursor.y * screen.width + cursor.x;
+            let start = min(*landmark, cursor_raw);
+            let end = max(*landmark, cursor_raw);
+
+            for i in start..end {
+                screen.cells[i].highlight = false;
+            }
+
+            let content = cut(screen, end + 1, end + screen.width - (end % screen.width));
+            paste(screen, start, content);
+
+            let start = Pos::from_raw(start, screen.width);
+            let end = Pos::from_raw(end, screen.width);
+
+            move_block_vertically(
+                screen,
+                end.y + 1,
+                screen.line_count - end.y,
+                start.y as isize - end.y as isize,
+            )?;
+
+            *cursor = start.into();
+            context.prev_cursor = start.into();
             context.mode = Mode::Normal;
             cursor.reset(screen, context.mode);
         }
@@ -132,7 +201,7 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
             cursor.y = 0;
             cursor.x = 0;
         }
-        (Mode::Normal, 'G') => {
+        (Mode::Normal | Mode::Visual(_), 'G') => {
             cursor.y = screen.line_count - 1;
             cursor.go_to_line_end(screen, context.mode);
         }
@@ -170,7 +239,7 @@ pub fn exec_binding(context: &mut Context, key: char) -> anyhow::Result<bool> {
                 ch => ch,
             };
 
-            screen.cells[idx] = Cell { char };
+            screen.cells[idx] = Cell::new(char);
             cursor.right(screen, context.mode);
         }
         _ => {}

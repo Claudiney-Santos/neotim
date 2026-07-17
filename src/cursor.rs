@@ -7,6 +7,35 @@ const CURSOR_UNDERLINE: usize = 4;
 const CURSOR_BAR: usize = 6;
 
 #[derive(Copy, Clone)]
+pub struct Pos {
+    pub x: usize,
+    pub y: usize,
+}
+
+impl Pos {
+    pub fn new(x: usize, y: usize) -> Self {
+        Self { x, y }
+    }
+
+    pub fn to_raw(&self, width: usize) -> usize {
+        self.y * width + self.x
+    }
+
+    pub fn from_raw(raw_idx: usize, width: usize) -> Self {
+        Self {
+            x: raw_idx % width,
+            y: raw_idx / width,
+        }
+    }
+}
+
+impl From<Pos> for Cursor {
+    fn from(b: Pos) -> Self {
+        Self { x: b.x, y: b.y }
+    }
+}
+
+#[derive(Copy, Clone)]
 pub struct Cursor {
     pub x: usize,
     pub y: usize,
@@ -28,6 +57,7 @@ impl Cursor {
 
         let mode = match mode {
             Mode::Normal => CURSOR_BLOCK,
+            Mode::Visual(_) => CURSOR_BLOCK,
             Mode::Undo => CURSOR_BLOCK,
             Mode::Replace => CURSOR_UNDERLINE,
             Mode::Delete => CURSOR_UNDERLINE,
@@ -186,7 +216,9 @@ impl Cursor {
             _ => State::NonAlphabetic,
         };
 
-        let mut step = idx;
+        let mut step = 0;
+
+        let eof = (screen.line_count - 1) * screen.width + screen.line_len(screen.line_count - 1);
 
         for (i, c) in screen.cells.iter().skip(idx + 1).enumerate() {
             match (&state, c.char) {
@@ -205,6 +237,7 @@ impl Cursor {
                         state = State::NonAlphabetic;
                     }
                 }
+                _ if i >= eof => break,
                 _ => {}
             }
         }

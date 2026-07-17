@@ -1,18 +1,26 @@
 use std::{panic, process::Command};
-use ti::{bindings::*, screen::Context, *};
+use ti::{
+    bindings::*,
+    screen::{Cell, Context},
+    *,
+};
 
-pub fn generate_patch(diff: Vec<(usize, usize, char)>) -> String {
+pub fn generate_patch(diff: Vec<(usize, usize, Cell)>) -> String {
     let mut render = String::new();
 
     render.push_str(HIDE_CURSOR);
 
-    for (cx, cy, char) in diff {
+    for (cx, cy, cell) in diff {
+        let gray = if cell.char == '·' { "90" } else { "0" };
+        let highlighted = if cell.highlight { ";40" } else { "" };
+
         render.push_str(&format!(
-            "\x1b[{};{}H\x1b[{}m{}\x1b[0m",
+            "\x1b[{};{}H\x1b[{}{}m{}\x1b[0m",
             cy + 1,
             cx + 1,
-            if char == '·' { "90" } else { "0" },
-            char,
+            gray,
+            highlighted,
+            cell.char,
         ));
     }
 

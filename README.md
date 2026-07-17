@@ -18,6 +18,6 @@ Toy vim like text editor
 - [X] Implement new undo to handle line tracker
 - [X] Improve error handling
 - [X] Solve b command bug
-- [ ] Implement x command
+- [X] Implement x command
 - [ ] Implement visual mode
 - [ ] Implement virtual screen matrix

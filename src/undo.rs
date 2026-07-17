@@ -1,9 +1,12 @@
-use crate::{cursor::Cursor, screen::Mode};
+use crate::{
+    cursor::Cursor,
+    screen::{Cell, Mode},
+};
 
 const UNDO_STACK_SIZE: usize = 10;
 
 pub struct UndoEntry {
-    pub delta: Vec<(usize, usize, char)>,
+    pub delta: Vec<(usize, usize, Cell)>,
     pub cursor: Cursor,
     pub line_count: usize,
 }

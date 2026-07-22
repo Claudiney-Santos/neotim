@@ -1,33 +1,5 @@
 use std::{panic, process::Command};
-use ti::{
-    bindings::*,
-    screen::{Cell, Context},
-    *,
-};
-
-pub fn generate_patch(diff: Vec<(usize, usize, Cell)>) -> String {
-    let mut render = String::new();
-
-    render.push_str(HIDE_CURSOR);
-
-    for (cx, cy, cell) in diff {
-        let gray = if cell.char == '·' { "90" } else { "0" };
-        let highlighted = if cell.highlight { ";40" } else { "" };
-
-        render.push_str(&format!(
-            "\x1b[{};{}H\x1b[{}{}m{}\x1b[0m",
-            cy + 1,
-            cx + 1,
-            gray,
-            highlighted,
-            cell.char,
-        ));
-    }
-
-    render.push_str(SHOW_CURSOR);
-
-    render
-}
+use ti::{context::*, render_buffer::RenderBuffer, *};
 
 fn main() -> anyhow::Result<()> {
     let mut context = Context::new()?;
@@ -56,16 +28,19 @@ fn main() -> anyhow::Result<()> {
     Command::new("stty").args(["raw", "-echo"]).status()?;
     print!("{CLEAR_SCREEN}");
 
+    let mut front_buffer = RenderBuffer::new();
+    let mut back_buffer: RenderBuffer;
+
     loop {
-        let diff = context.sync_screen_buffers();
+        back_buffer = RenderBuffer::from(&context.doc, &context.viewport);
 
-        prin!(
-            "{}{}",
-            generate_patch(diff),
-            context.cursor.build(&context.back_buffer, context.mode)
-        );
+        let diff = back_buffer.diff(&front_buffer);
 
-        if !process_input(&mut context).unwrap() {
+        prin!("{}", RenderBuffer::patch(diff));
+
+        front_buffer = back_buffer.to_owned();
+
+        if !context.handle_input()? {
             break;
         }
     }

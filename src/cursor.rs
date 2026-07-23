@@ -2,7 +2,9 @@ const CURSOR_BLOCK: usize = 2;
 const CURSOR_UNDERLINE: usize = 4;
 const CURSOR_BAR: usize = 6;
 
-use crate::{app::Mode, viewport::Viewport};
+use std::cmp::{max, min};
+
+use crate::{app::Mode, document::Document, viewport::Viewport};
 
 #[derive(Copy, Clone)]
 pub struct Cursor {
@@ -15,13 +17,15 @@ impl Cursor {
         Self { row: 0, col: 0 }
     }
 
-    pub fn build(&self, viewport: &Viewport, mode: Mode) -> String {
+    pub fn build(&self, doc: &Document, viewport: &Viewport, mode: Mode) -> String {
         let mut building = String::new();
+
+        let col = min(self.col, Cursor::col_bound(self.row, doc, mode));
 
         building.push_str(&format!(
             "\x1b[{};{}H",
             self.row + viewport.top_row + 1,
-            self.col + viewport.left_column + 1
+            col + viewport.left_column + 1
         ));
 
         let mode = match mode {
@@ -37,29 +41,44 @@ impl Cursor {
 
         building
     }
+
+    fn col_bound(row: usize, doc: &Document, mode: Mode) -> usize {
+        match mode {
+            Mode::Insert => doc.get_content()[row].len(),
+            _ => max(doc.get_content()[row].len() as isize - 1, 0) as usize,
+        }
+    }
+
+    fn row_bound(doc: &Document) -> usize {
+        max(doc.get_content().len() as isize - 2, 0) as usize
+    }
+
+    fn bound(col: isize, row: isize, doc: &Document, mode: Mode) -> (usize, usize) {
+        let (col, row) = (max(col, 0) as usize, max(row, 0) as usize);
+
+        (
+            max(min(col, Cursor::col_bound(row, doc, mode)), 0),
+            max(min(row, Cursor::row_bound(doc)), 0),
+        )
+    }
+
+    pub fn left(&mut self, doc: &Document, mode: Mode) {
+        (self.col, _) = Cursor::bound(self.col as isize - 1, self.row as isize, doc, mode);
+    }
+
+    pub fn right(&mut self, doc: &Document, mode: Mode) {
+        (self.col, _) = Cursor::bound(self.col as isize + 1, self.row as isize, doc, mode);
+    }
+
+    pub fn down(&mut self, doc: &Document, mode: Mode) {
+        (_, self.row) = Cursor::bound(self.col as isize, self.row as isize + 1, doc, mode);
+    }
+
+    pub fn up(&mut self, doc: &Document, mode: Mode) {
+        (_, self.row) = Cursor::bound(self.col as isize, self.row as isize - 1, doc, mode);
+    }
 }
 
-//
-//     pub fn reset(&mut self, screen: &ScreenBuffer, mode: Mode) {
-//         self.x = x_bounded(self.x as isize, self.y, screen, mode)
-//     }
-//
-//     pub fn left(&mut self, screen: &ScreenBuffer, mode: Mode) {
-//         self.x = x_bounded(self.x as isize - 1, self.y, screen, mode);
-//     }
-//
-//     pub fn right(&mut self, screen: &ScreenBuffer, mode: Mode) {
-//         self.x = x_bounded(self.x as isize + 1, self.y, screen, mode);
-//     }
-//
-//     pub fn down(&mut self, screen: &ScreenBuffer) {
-//         self.y = y_bounded(self.y as isize + 1, screen);
-//     }
-//
-//     pub fn up(&mut self, screen: &ScreenBuffer) {
-//         self.y = y_bounded(self.y as isize - 1, screen);
-//     }
-//
 //     pub fn go_to_line_start(&mut self, screen: &ScreenBuffer) {
 //         let start = self.y * screen.width;
 //         let end = start + screen.line_len(self.y);

@@ -39,7 +39,7 @@ fn main() -> anyhow::Result<()> {
         prin!(
             "{}{}",
             RenderBuffer::patch(diff),
-            app.cursor.build(&app.viewport, app.mode)
+            app.cursor.build(&app.doc, &app.viewport, app.mode)
         );
 
         front_buffer = back_buffer.to_owned();

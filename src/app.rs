@@ -25,7 +25,7 @@ impl App {
             doc: Document::new()?,
             viewport: Viewport::new(),
             cursor: Cursor::new(),
-            mode: Mode::Undo,
+            mode: Mode::Normal,
         })
     }
 
@@ -33,13 +33,15 @@ impl App {
         let mut key = [0; 1];
         stdin().read_exact(&mut key)?;
 
-        match (self.mode, key) {
-            // (Mode::Normal | Mode::Visual(_), 'Q') => return Ok(false),
+        let App { cursor, doc, .. } = self;
+
+        match (self.mode, key[0] as char) {
+            (Mode::Normal | Mode::Visual(_), 'Q') => return Ok(false),
             // (Mode::Normal | Mode::Visual(_), 'W') => file::save(file_path, screen)?,
-            // (Mode::Normal | Mode::Visual(_), 'h') => cursor.left(screen, context.mode),
-            // (Mode::Normal | Mode::Visual(_), 'j') => cursor.down(screen),
-            // (Mode::Normal | Mode::Visual(_), 'k') => cursor.up(screen),
-            // (Mode::Normal | Mode::Visual(_), 'l') => cursor.right(screen, context.mode),
+            (Mode::Normal | Mode::Visual(_), 'h') => cursor.left(doc, self.mode),
+            (Mode::Normal | Mode::Visual(_), 'j') => cursor.down(doc, self.mode),
+            (Mode::Normal | Mode::Visual(_), 'k') => cursor.up(doc, self.mode),
+            (Mode::Normal | Mode::Visual(_), 'l') => cursor.right(doc, self.mode),
             // (Mode::Normal, 'i') => {
             //     context.mode = Mode::Insert;
             //     cursor.reset(screen, context.mode);

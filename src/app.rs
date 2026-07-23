@@ -76,11 +76,12 @@ impl App {
                 self.mode = Mode::Insert;
                 cursor.go_to_end_of_line(doc, self.mode);
             }
-            // (Mode::Normal, 's') => {
-            //     context.mode = Mode::Insert;
-            //     cursor.right(screen, context.mode);
-            //     backspace(screen, cursor)?;
-            // }
+            (Mode::Normal, 's') => {
+                self.mode = Mode::Insert;
+                doc.remove_char(cursor.col, cursor.row);
+                // cursor.right(screen, context.mode);
+                // backspace(screen, cursor)?;
+            }
             (Mode::Normal, 'a') => {
                 self.mode = Mode::Insert;
                 cursor.right(doc, self.mode);
@@ -129,7 +130,7 @@ impl App {
             (Mode::Insert, ESC) => {
                 self.mode = Mode::Normal;
                 (cursor.col, _) =
-                    Cursor::bound(cursor.col as isize, cursor.row as isize, doc, self.mode);
+                    Cursor::bound(cursor.col as isize - 1, cursor.row as isize, doc, self.mode);
             }
             // (Mode::Visual(landmark), 'D') => {
             //     let cursor_raw = cursor.y * screen.width + cursor.x;

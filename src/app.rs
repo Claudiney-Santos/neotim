@@ -81,10 +81,10 @@ impl App {
             //     cursor.right(screen, context.mode);
             //     backspace(screen, cursor)?;
             // }
-            // (Mode::Normal, 'a') => {
-            //     context.mode = Mode::Insert;
-            //     cursor.right(screen, context.mode);
-            // }
+            (Mode::Normal, 'a') => {
+                self.mode = Mode::Insert;
+                cursor.right(doc, self.mode);
+            }
             // (Mode::Normal, 'o') => {
             //     if cursor.y < screen.line_count {
             //         move_block_vertically(screen, cursor.y + 1, screen.line_count - cursor.y, 1)?;

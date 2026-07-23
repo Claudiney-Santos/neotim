@@ -1,4 +1,4 @@
-use crate::{context::Mode, cursor::Cursor, render_buffer::Cell};
+use crate::{app::Mode, cursor::Cursor, render_buffer::Cell};
 
 const UNDO_STACK_SIZE: usize = 10;
 

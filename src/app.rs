@@ -12,14 +12,14 @@ pub enum Mode {
     Undo,
 }
 
-pub struct Context {
+pub struct App {
     pub doc: Document,
     pub viewport: Viewport,
     pub cursor: Cursor,
     pub mode: Mode,
 }
 
-impl Context {
+impl App {
     pub fn new() -> anyhow::Result<Self> {
         Ok(Self {
             doc: Document::new()?,

@@ -1,8 +1,8 @@
 use std::{panic, process::Command};
-use ti::{context::*, render_buffer::RenderBuffer, *};
+use ti::{app::*, render_buffer::RenderBuffer, *};
 
 fn main() -> anyhow::Result<()> {
-    let mut context = Context::new()?;
+    let mut app = App::new()?;
 
     panic::set_hook(Box::new(|panic_info| {
         print!("{CLEAR_SCREEN}\x1b[2 q");
@@ -32,7 +32,7 @@ fn main() -> anyhow::Result<()> {
     let mut back_buffer: RenderBuffer;
 
     loop {
-        back_buffer = RenderBuffer::from(&context.doc, &context.viewport);
+        back_buffer = RenderBuffer::from(&app.doc, &app.viewport);
 
         let diff = back_buffer.diff(&front_buffer);
 
@@ -40,7 +40,7 @@ fn main() -> anyhow::Result<()> {
 
         front_buffer = back_buffer.to_owned();
 
-        if !context.handle_input()? {
+        if !app.handle_input()? {
             break;
         }
     }

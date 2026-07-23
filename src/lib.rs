@@ -1,4 +1,4 @@
-pub mod context;
+pub mod app;
 pub mod cursor;
 pub mod document;
 pub mod error;

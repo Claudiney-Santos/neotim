@@ -87,6 +87,29 @@ impl Cursor {
         self.row = Cursor::row_bound(doc);
         self.col = Cursor::col_bound(self.row, doc, Mode::Normal);
     }
+
+    pub fn go_to_start_of_line(&mut self, doc: &Document) {
+        self.col = doc.get_content()[self.row]
+            .chars()
+            .enumerate()
+            .find(|(_, ch)| *ch != ' ')
+            .map(|(idx, _)| idx)
+            .unwrap_or(0);
+    }
+
+    pub fn go_to_end_of_line(&mut self, doc: &Document, mode: Mode) {
+        let last_char_col = doc.get_content()[self.row]
+            .chars()
+            .enumerate()
+            .last()
+            .map(|(idx, _)| idx)
+            .unwrap_or(0);
+
+        self.col = match mode {
+            Mode::Insert => last_char_col + 1,
+            _ => last_char_col,
+        }
+    }
 }
 //     pub fn go_to_next_word(&mut self, screen: &ScreenBuffer) {
 //         let mut idx = self.y * screen.width + self.x;

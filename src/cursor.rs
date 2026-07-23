@@ -63,7 +63,8 @@ impl Cursor {
     }
 
     pub fn left(&mut self, doc: &Document, mode: Mode) {
-        (self.col, _) = Cursor::bound(self.col as isize - 1, self.row as isize, doc, mode);
+        let (actual_col, _) = Cursor::bound(self.col as isize, self.row as isize, doc, mode);
+        (self.col, _) = Cursor::bound(actual_col as isize - 1, self.row as isize, doc, mode);
     }
 
     pub fn right(&mut self, doc: &Document, mode: Mode) {

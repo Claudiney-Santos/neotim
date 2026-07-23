@@ -1,6 +1,6 @@
 use std::io::{self, Read, stdin};
 
-use crate::{ESC, cursor::Cursor, document::Document, viewport::Viewport};
+use crate::{BACKSPACE, ESC, cursor::Cursor, document::Document, viewport::Viewport};
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum Mode {
@@ -241,7 +241,10 @@ impl App {
             //     cursor.x = 0;
             //     cursor.y += 1;
             // }
-            // (Mode::Insert, BACKSPACE) => backspace(screen, cursor)?,
+            (Mode::Insert, BACKSPACE) => {
+                cursor.left(doc, self.mode);
+                doc.remove_char(cursor.col, cursor.row);
+            }
             (Mode::Insert, ch) if ch.is_control() => {}
             (Mode::Insert, ch) => {
                 doc.insert_char(cursor.col, cursor.row, ch);

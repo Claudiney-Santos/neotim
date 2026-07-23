@@ -41,4 +41,8 @@ impl Document {
     pub fn insert_char(&mut self, col: usize, row: usize, ch: char) {
         self.lines[row].insert(col, ch);
     }
+
+    pub fn remove_char(&mut self, col: usize, row: usize) {
+        self.lines[row].remove(col);
+    }
 }

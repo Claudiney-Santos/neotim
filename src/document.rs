@@ -33,16 +33,18 @@ impl Document {
     }
 
     pub fn save(&self) -> io::Result<()> {
-        fs::write(&self.file_path, self.lines.join("\n"))?;
-
-        Ok(())
+        fs::write(&self.file_path, self.lines.join("\n"))
     }
 
     pub fn insert_char(&mut self, col: usize, row: usize, ch: char) {
-        self.lines[row].insert(col, ch);
+        self.lines[row].insert(col, ch)
     }
 
     pub fn remove_char(&mut self, col: usize, row: usize) {
         self.lines[row].remove(col);
+    }
+
+    pub fn insert_line(&mut self, row: usize) {
+        self.lines.insert(row, String::new())
     }
 }

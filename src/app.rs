@@ -49,7 +49,7 @@ impl App {
             (Normal | Visual(_), 'k') => cursor.up(doc, self.mode),
             (Normal | Visual(_), 'l') => cursor.right(doc, self.mode),
             (Mode::Normal, 'i') => {
-                self.mode = Mode::Insert;
+                self.mode = Insert;
                 (cursor.col, _) =
                     Cursor::bound(cursor.col as isize, cursor.row as isize, doc, self.mode);
             }
@@ -66,35 +66,36 @@ impl App {
             //     });
             // }
             (Mode::Normal, 'I') => {
-                self.mode = Mode::Insert;
+                self.mode = Insert;
                 cursor.go_to_start_of_line(doc);
             }
             // (Mode::Normal | Mode::Visual(_), 'w') => cursor.go_to_next_word(screen),
             // (Mode::Normal | Mode::Visual(_), 'b') => cursor.go_to_prev_word(screen),
             // (Mode::Normal | Mode::Visual(_), 'e') => cursor.go_to_last_char_of_next_word(screen),
             (Mode::Normal, 'A') => {
-                self.mode = Mode::Insert;
+                self.mode = Insert;
                 cursor.go_to_end_of_line(doc, self.mode);
             }
             (Mode::Normal, 's') => {
-                self.mode = Mode::Insert;
+                self.mode = Insert;
                 doc.remove_char(cursor.col, cursor.row);
-                // cursor.right(screen, context.mode);
-                // backspace(screen, cursor)?;
             }
             (Mode::Normal, 'a') => {
-                self.mode = Mode::Insert;
+                self.mode = Insert;
                 cursor.right(doc, self.mode);
             }
-            // (Mode::Normal, 'o') => {
-            //     if cursor.y < screen.line_count {
-            //         move_block_vertically(screen, cursor.y + 1, screen.line_count - cursor.y, 1)?;
-            //     }
-            //
-            //     cursor.x = 0;
-            //     cursor.y += 1;
-            //     context.mode = Mode::Insert;
-            // }
+            (Mode::Normal, 'o') => {
+                doc.insert_line(cursor.row + 1);
+                self.mode = Insert;
+                cursor.down(doc, self.mode);
+                // if cursor.y < screen.line_count {
+                //     move_block_vertically(screen, cursor.y + 1, screen.line_count - cursor.y, 1)?;
+                // }
+                //
+                // cursor.x = 0;
+                // cursor.y += 1;
+                // context.mode = Mode::Insert;
+            }
             // (Mode::Replace, char) => {
             //     let i = cursor.y * screen.width + cursor.x;
             //

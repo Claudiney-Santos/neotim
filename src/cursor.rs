@@ -1,6 +1,8 @@
-// const CURSOR_BLOCK: usize = 2;
-// const CURSOR_UNDERLINE: usize = 4;
-// const CURSOR_BAR: usize = 6;
+const CURSOR_BLOCK: usize = 2;
+const CURSOR_UNDERLINE: usize = 4;
+const CURSOR_BAR: usize = 6;
+
+use crate::{app::Mode, viewport::Viewport};
 
 #[derive(Copy, Clone)]
 pub struct Cursor {
@@ -11,6 +13,29 @@ pub struct Cursor {
 impl Cursor {
     pub fn new() -> Self {
         Self { row: 0, col: 0 }
+    }
+
+    pub fn build(&self, viewport: &Viewport, mode: Mode) -> String {
+        let mut building = String::new();
+
+        building.push_str(&format!(
+            "\x1b[{};{}H",
+            self.row + viewport.top_row + 1,
+            self.col + viewport.left_column + 1
+        ));
+
+        let mode = match mode {
+            Mode::Normal => CURSOR_BLOCK,
+            Mode::Visual(_) => CURSOR_BLOCK,
+            Mode::Undo => CURSOR_BLOCK,
+            Mode::Replace => CURSOR_UNDERLINE,
+            Mode::Delete => CURSOR_UNDERLINE,
+            Mode::Insert => CURSOR_BAR,
+        };
+
+        building.push_str(&format!("\x1b[{} q", mode));
+
+        building
     }
 }
 

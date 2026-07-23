@@ -36,7 +36,11 @@ fn main() -> anyhow::Result<()> {
 
         let diff = back_buffer.diff(&front_buffer);
 
-        prin!("{}", RenderBuffer::patch(diff));
+        prin!(
+            "{}{}",
+            RenderBuffer::patch(diff),
+            app.cursor.build(&app.viewport, app.mode)
+        );
 
         front_buffer = back_buffer.to_owned();
 

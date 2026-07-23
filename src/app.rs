@@ -1,6 +1,6 @@
-use std::io::{Read, stdin};
+use std::io::{self, Read, stdin};
 
-use crate::{cursor::Cursor, document::Document, viewport::Viewport};
+use crate::{ESC, cursor::Cursor, document::Document, viewport::Viewport};
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum Mode {
@@ -19,6 +19,13 @@ pub struct App {
     pub mode: Mode,
 }
 
+pub fn get_key_pressed() -> io::Result<char> {
+    let mut key = [0; 1];
+    stdin().read_exact(&mut key)?;
+
+    Ok(key[0] as char)
+}
+
 impl App {
     pub fn new() -> anyhow::Result<Self> {
         Ok(Self {
@@ -29,23 +36,23 @@ impl App {
         })
     }
 
-    pub fn handle_input(&mut self) -> anyhow::Result<bool> {
-        let mut key = [0; 1];
-        stdin().read_exact(&mut key)?;
+    pub fn handle_input(&mut self, key: char) -> anyhow::Result<bool> {
+        use Mode::*;
 
         let App { cursor, doc, .. } = self;
 
-        match (self.mode, key[0] as char) {
-            (Mode::Normal | Mode::Visual(_), 'Q') => return Ok(false),
-            // (Mode::Normal | Mode::Visual(_), 'W') => file::save(file_path, screen)?,
-            (Mode::Normal | Mode::Visual(_), 'h') => cursor.left(doc, self.mode),
-            (Mode::Normal | Mode::Visual(_), 'j') => cursor.down(doc, self.mode),
-            (Mode::Normal | Mode::Visual(_), 'k') => cursor.up(doc, self.mode),
-            (Mode::Normal | Mode::Visual(_), 'l') => cursor.right(doc, self.mode),
-            // (Mode::Normal, 'i') => {
-            //     context.mode = Mode::Insert;
-            //     cursor.reset(screen, context.mode);
-            // }
+        match (self.mode, key) {
+            (Normal | Visual(_), 'Q') => return Ok(false),
+            (Normal | Visual(_), 'W') => doc.save()?,
+            (Normal | Visual(_), 'h') => cursor.left(doc, self.mode),
+            (Normal | Visual(_), 'j') => cursor.down(doc, self.mode),
+            (Normal | Visual(_), 'k') => cursor.up(doc, self.mode),
+            (Normal | Visual(_), 'l') => cursor.right(doc, self.mode),
+            (Mode::Normal, 'i') => {
+                self.mode = Mode::Insert;
+                (cursor.col, _) =
+                    Cursor::bound(cursor.col as isize, cursor.row as isize, doc, self.mode);
+            }
             // (Mode::Normal, 'u') => {
             //     context.undo_stack.pop().map(|mut undo| {
             //         undo.delta.reverse();
@@ -119,10 +126,11 @@ impl App {
             //     context.mode = Mode::Normal;
             //     cursor.reset(screen, context.mode);
             // }
-            // (Mode::Insert, ESC) => {
-            //     context.mode = Mode::Normal;
-            //     cursor.reset(screen, context.mode);
-            // }
+            (Mode::Insert, ESC) => {
+                self.mode = Mode::Normal;
+                (cursor.col, _) =
+                    Cursor::bound(cursor.col as isize, cursor.row as isize, doc, self.mode);
+            }
             // (Mode::Visual(landmark), 'D') => {
             //     let cursor_raw = cursor.y * screen.width + cursor.x;
             //     let start = min(*landmark, cursor_raw);
@@ -204,21 +212,18 @@ impl App {
             // (Mode::Normal, 'd') => {
             //     context.mode = Mode::Delete;
             // }
-            // (Mode::Normal, 'g') => {
-            //     let mut k = [0; 1];
-            //     stdin().read_exact(&mut k)?;
-            //
-            //     if k[0] as char != 'g' {
-            //         return exec_binding(context, k[0] as char);
-            //     }
-            //
-            //     cursor.y = 0;
-            //     cursor.x = 0;
-            // }
-            // (Mode::Normal | Mode::Visual(_), 'G') => {
-            //     cursor.y = screen.line_count - 1;
-            //     cursor.go_to_line_end(screen, context.mode);
-            // }
+            (Mode::Normal, 'g') => {
+                let key = get_key_pressed()?;
+
+                if key != 'g' {
+                    return self.handle_input(key);
+                }
+
+                cursor.go_to_first_line();
+            }
+            (Mode::Normal | Mode::Visual(_), 'G') => {
+                cursor.go_to_last_char(&doc);
+            }
             // (Mode::Normal, ENTER) => {
             //     cursor.down(screen);
             //     cursor.go_to_line_start(screen);
@@ -237,25 +242,11 @@ impl App {
             //     cursor.y += 1;
             // }
             // (Mode::Insert, BACKSPACE) => backspace(screen, cursor)?,
-            // (Mode::Insert, ch) if ch.is_control() => {}
-            // (Mode::Insert, ch) => {
-            //     move_block_horizontally(
-            //         screen,
-            //         cursor.x,
-            //         cursor.y,
-            //         screen.line_len(cursor.y) - cursor.x,
-            //         1,
-            //     )?;
-            //
-            //     let idx = cursor.y * screen.width + cursor.x;
-            //     let char = match ch {
-            //         ' ' => '·',
-            //         ch => ch,
-            //     };
-            //
-            //     screen.cells[idx] = Cell::new(char);
-            //     cursor.right(screen, context.mode);
-            // }
+            (Mode::Insert, ch) if ch.is_control() => {}
+            (Mode::Insert, ch) => {
+                doc.insert_char(cursor.col, cursor.row, ch);
+                cursor.right(doc, self.mode);
+            }
             _ => {}
         }
 

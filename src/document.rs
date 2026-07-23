@@ -37,4 +37,8 @@ impl Document {
 
         Ok(())
     }
+
+    pub fn insert_char(&mut self, col: usize, row: usize, ch: char) {
+        self.lines[row].insert(col, ch);
+    }
 }

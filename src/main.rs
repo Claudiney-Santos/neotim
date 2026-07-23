@@ -44,7 +44,7 @@ fn main() -> anyhow::Result<()> {
 
         front_buffer = back_buffer.to_owned();
 
-        if !app.handle_input()? {
+        if !app.handle_input(get_key_pressed()?)? {
             break;
         }
     }

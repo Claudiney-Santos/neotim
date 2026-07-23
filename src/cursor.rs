@@ -53,7 +53,7 @@ impl Cursor {
         max(doc.get_content().len() as isize - 2, 0) as usize
     }
 
-    fn bound(col: isize, row: isize, doc: &Document, mode: Mode) -> (usize, usize) {
+    pub fn bound(col: isize, row: isize, doc: &Document, mode: Mode) -> (usize, usize) {
         let (col, row) = (max(col, 0) as usize, max(row, 0) as usize);
 
         (
@@ -77,27 +77,16 @@ impl Cursor {
     pub fn up(&mut self, doc: &Document, mode: Mode) {
         (_, self.row) = Cursor::bound(self.col as isize, self.row as isize - 1, doc, mode);
     }
-}
 
-//     pub fn go_to_line_start(&mut self, screen: &ScreenBuffer) {
-//         let start = self.y * screen.width;
-//         let end = start + screen.line_len(self.y);
-//
-//         self.x = 0;
-//
-//         for i in start..end {
-//             self.x = i % screen.width;
-//
-//             if screen.cells[i].char != ' ' && screen.cells[i].char != '·' {
-//                 break;
-//             }
-//         }
-//     }
-//
-//     pub fn go_to_line_end(&mut self, screen: &ScreenBuffer, mode: Mode) {
-//         self.x = x_bounded(screen.width as isize, self.y, screen, mode);
-//     }
-//
+    pub fn go_to_first_line(&mut self) {
+        self.row = 0;
+    }
+
+    pub fn go_to_last_char(&mut self, doc: &Document) {
+        self.row = Cursor::row_bound(doc);
+        self.col = Cursor::col_bound(self.row, doc, Mode::Normal);
+    }
+}
 //     pub fn go_to_next_word(&mut self, screen: &ScreenBuffer) {
 //         let mut idx = self.y * screen.width + self.x;
 //
@@ -255,4 +244,4 @@ impl Cursor {
 //
 // pub fn y_bounded(y: isize, screen: &ScreenBuffer) -> usize {
 //     max(min(screen.line_count as isize - 1, y), 0) as usize
-// }
+//    }

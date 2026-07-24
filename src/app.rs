@@ -242,12 +242,23 @@ impl App {
             //     cursor.y += 1;
             // }
             (Mode::Insert, BACKSPACE) => {
+                if cursor.row == 0 && cursor.col == 0 {
+                    return Ok(true);
+                }
+
+                if cursor.col == 0 {
+                    cursor.up();
+                    cursor.go_to_end_of_line(doc, Insert);
+                    doc.delete(cursor.to_pos(), cursor.to_pos());
+                    return Ok(true);
+                }
+
                 cursor.left(doc);
-                doc.remove_char(cursor.col, cursor.row);
+                doc.delete(cursor.to_pos(), cursor.to_pos());
             }
             (Mode::Insert, ch) if ch.is_control() => {}
             (Mode::Insert, ch) => {
-                doc.insert_char(cursor.col, cursor.row, ch);
+                doc.insert(cursor.col, cursor.row, &ch.to_string());
                 cursor.right(doc, *mode);
             }
             _ => {}

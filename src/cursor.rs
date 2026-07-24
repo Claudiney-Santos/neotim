@@ -4,7 +4,11 @@ const CURSOR_BAR: usize = 6;
 
 use std::cmp::{max, min};
 
-use crate::{app::Mode, document::Document, viewport::Viewport};
+use crate::{
+    app::Mode,
+    document::{Document, Pos},
+    viewport::Viewport,
+};
 
 #[derive(Copy, Clone)]
 pub struct Cursor {
@@ -103,6 +107,13 @@ impl Cursor {
         self.col = match mode {
             Mode::Insert => last_char_col + 1,
             _ => last_char_col,
+        }
+    }
+
+    pub fn to_pos(&self) -> Pos {
+        Pos {
+            row: self.row,
+            col: self.col,
         }
     }
 }

@@ -1,9 +1,11 @@
-pub mod bindings;
+pub mod app;
 pub mod cursor;
+pub mod document;
 pub mod error;
-pub mod file;
-pub mod screen;
+pub mod render_buffer;
+pub mod terminal;
 pub mod undo;
+pub mod viewport;
 
 pub const CLEAR_SCREEN: &str = "\x1b[2J\x1b[H";
 pub const HIDE_CURSOR: &str = "\x1b[?25l";

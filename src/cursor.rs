@@ -20,7 +20,7 @@ impl Cursor {
     pub fn build(&self, doc: &Document, viewport: &Viewport, mode: Mode) -> String {
         let mut building = String::new();
 
-        let col = min(self.col, Cursor::col_bound(self.row, doc, mode));
+        let col = min(self.col, doc.col_bound(self.row, mode));
 
         building.push_str(&format!(
             "\x1b[{};{}H",
@@ -42,41 +42,36 @@ impl Cursor {
         building
     }
 
-    fn col_bound(row: usize, doc: &Document, mode: Mode) -> usize {
-        match mode {
-            Mode::Insert => doc.get_content()[row].len(),
-            _ => max(doc.get_content()[row].len() as isize - 1, 0) as usize,
+    pub fn bound_col(&mut self, doc: &Document, mode: Mode) {
+        self.col = max(min(self.col, doc.col_bound(self.row, mode)), 0);
+    }
+
+    pub fn bound_row(&mut self, doc: &Document) {
+        self.row = max(min(self.row, doc.row_bound()), 0);
+    }
+
+    pub fn left(&mut self, doc: &Document) {
+        self.bound_col(doc, Mode::Normal);
+
+        if self.col > 0 {
+            self.col -= 1;
         }
     }
 
-    fn row_bound(doc: &Document) -> usize {
-        max(doc.get_content().len() as isize - 2, 0) as usize
-    }
-
-    pub fn bound(col: isize, row: isize, doc: &Document, mode: Mode) -> (usize, usize) {
-        let (col, row) = (max(col, 0) as usize, max(row, 0) as usize);
-
-        (
-            max(min(col, Cursor::col_bound(row, doc, mode)), 0),
-            max(min(row, Cursor::row_bound(doc)), 0),
-        )
-    }
-
-    pub fn left(&mut self, doc: &Document, mode: Mode) {
-        let (actual_col, _) = Cursor::bound(self.col as isize, self.row as isize, doc, mode);
-        (self.col, _) = Cursor::bound(actual_col as isize - 1, self.row as isize, doc, mode);
-    }
-
     pub fn right(&mut self, doc: &Document, mode: Mode) {
-        (self.col, _) = Cursor::bound(self.col as isize + 1, self.row as isize, doc, mode);
+        self.col += 1;
+        self.bound_col(doc, mode);
     }
 
-    pub fn down(&mut self, doc: &Document, mode: Mode) {
-        (_, self.row) = Cursor::bound(self.col as isize, self.row as isize + 1, doc, mode);
+    pub fn down(&mut self, doc: &Document) {
+        self.row += 1;
+        self.bound_row(doc);
     }
 
-    pub fn up(&mut self, doc: &Document, mode: Mode) {
-        (_, self.row) = Cursor::bound(self.col as isize, self.row as isize - 1, doc, mode);
+    pub fn up(&mut self) {
+        if self.row > 0 {
+            self.row -= 1;
+        }
     }
 
     pub fn go_to_first_line(&mut self) {
@@ -84,8 +79,8 @@ impl Cursor {
     }
 
     pub fn go_to_last_char(&mut self, doc: &Document) {
-        self.row = Cursor::row_bound(doc);
-        self.col = Cursor::col_bound(self.row, doc, Mode::Normal);
+        self.row = doc.row_bound();
+        self.col = doc.col_bound(self.row, Mode::Normal);
     }
 
     pub fn go_to_start_of_line(&mut self, doc: &Document) {

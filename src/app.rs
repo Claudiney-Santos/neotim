@@ -12,6 +12,13 @@ pub enum Mode {
     Undo,
 }
 
+impl Mode {
+    pub fn set(&mut self, mode: Mode) -> Mode {
+        *self = mode;
+        mode
+    }
+}
+
 pub struct App {
     pub doc: Document,
     pub viewport: Viewport,
@@ -39,20 +46,18 @@ impl App {
     pub fn handle_input(&mut self, key: char) -> anyhow::Result<bool> {
         use Mode::*;
 
-        let App { cursor, doc, .. } = self;
+        let App {
+            cursor, doc, mode, ..
+        } = self;
 
-        match (self.mode, key) {
+        match (*mode, key) {
             (Normal | Visual(_), 'Q') => return Ok(false),
             (Normal | Visual(_), 'W') => doc.save()?,
-            (Normal | Visual(_), 'h') => cursor.left(doc, self.mode),
-            (Normal | Visual(_), 'j') => cursor.down(doc, self.mode),
-            (Normal | Visual(_), 'k') => cursor.up(doc, self.mode),
-            (Normal | Visual(_), 'l') => cursor.right(doc, self.mode),
-            (Mode::Normal, 'i') => {
-                self.mode = Insert;
-                (cursor.col, _) =
-                    Cursor::bound(cursor.col as isize, cursor.row as isize, doc, self.mode);
-            }
+            (Normal | Visual(_), 'h') => cursor.left(doc),
+            (Normal | Visual(_), 'j') => cursor.down(doc),
+            (Normal | Visual(_), 'k') => cursor.up(),
+            (Normal | Visual(_), 'l') => cursor.right(doc, *mode),
+            (Mode::Normal, 'i') => cursor.bound_col(doc, mode.set(Insert)),
             // (Mode::Normal, 'u') => {
             //     context.undo_stack.pop().map(|mut undo| {
             //         undo.delta.reverse();
@@ -66,28 +71,25 @@ impl App {
             //     });
             // }
             (Mode::Normal, 'I') => {
-                self.mode = Insert;
+                mode.set(Insert);
                 cursor.go_to_start_of_line(doc);
             }
             // (Mode::Normal | Mode::Visual(_), 'w') => cursor.go_to_next_word(screen),
             // (Mode::Normal | Mode::Visual(_), 'b') => cursor.go_to_prev_word(screen),
             // (Mode::Normal | Mode::Visual(_), 'e') => cursor.go_to_last_char_of_next_word(screen),
-            (Mode::Normal, 'A') => {
-                self.mode = Insert;
-                cursor.go_to_end_of_line(doc, self.mode);
-            }
+            (Mode::Normal, 'A') => cursor.go_to_end_of_line(doc, mode.set(Insert)),
             (Mode::Normal, 's') => {
-                self.mode = Insert;
+                mode.set(Insert);
                 doc.remove_char(cursor.col, cursor.row);
             }
             (Mode::Normal, 'a') => {
-                self.mode = Insert;
+                mode.set(Insert);
                 cursor.right(doc, self.mode);
             }
             (Mode::Normal, 'o') => {
+                mode.set(Insert);
                 doc.insert_line(cursor.row + 1);
-                self.mode = Insert;
-                cursor.down(doc, self.mode);
+                cursor.down(doc);
                 // if cursor.y < screen.line_count {
                 //     move_block_vertically(screen, cursor.y + 1, screen.line_count - cursor.y, 1)?;
                 // }
@@ -128,11 +130,7 @@ impl App {
             //     context.mode = Mode::Normal;
             //     cursor.reset(screen, context.mode);
             // }
-            (Mode::Insert, ESC) => {
-                self.mode = Mode::Normal;
-                (cursor.col, _) =
-                    Cursor::bound(cursor.col as isize - 1, cursor.row as isize, doc, self.mode);
-            }
+            (Mode::Insert, ESC) => cursor.bound_col(doc, mode.set(Normal)),
             // (Mode::Visual(landmark), 'D') => {
             //     let cursor_raw = cursor.y * screen.width + cursor.x;
             //     let start = min(*landmark, cursor_raw);
@@ -224,7 +222,7 @@ impl App {
                 cursor.go_to_first_line();
             }
             (Mode::Normal | Mode::Visual(_), 'G') => {
-                cursor.go_to_last_char(&doc);
+                cursor.go_to_last_char(doc);
             }
             // (Mode::Normal, ENTER) => {
             //     cursor.down(screen);
@@ -244,13 +242,13 @@ impl App {
             //     cursor.y += 1;
             // }
             (Mode::Insert, BACKSPACE) => {
-                cursor.left(doc, self.mode);
+                cursor.left(doc);
                 doc.remove_char(cursor.col, cursor.row);
             }
             (Mode::Insert, ch) if ch.is_control() => {}
             (Mode::Insert, ch) => {
                 doc.insert_char(cursor.col, cursor.row, ch);
-                cursor.right(doc, self.mode);
+                cursor.right(doc, *mode);
             }
             _ => {}
         }

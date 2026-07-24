@@ -1,12 +1,13 @@
 // TODO: create document struct
 // Its responsability is handle the reading, updating, and writing file document
 
+use std::cmp::max;
 use std::{
     env, fs,
     io::{self},
 };
 
-use crate::error::TiError;
+use crate::{app::Mode, error::TiError};
 
 pub struct Document {
     file_path: String,
@@ -46,5 +47,16 @@ impl Document {
 
     pub fn insert_line(&mut self, row: usize) {
         self.lines.insert(row, String::new())
+    }
+
+    pub fn col_bound(&self, row: usize, mode: Mode) -> usize {
+        match mode {
+            Mode::Insert => self.lines[row].len(),
+            _ => max(self.lines[row].len() as isize - 1, 0) as usize,
+        }
+    }
+
+    pub fn row_bound(&self) -> usize {
+        max(self.lines.len() as isize - 2, 0) as usize
     }
 }

@@ -57,75 +57,34 @@ impl Document {
             "You messed up with start and end boundaries"
         );
 
-        let delete_start_line = start.col == self.lines[start.row].len();
-        let delete_end_line = end.col == self.lines[end.row].len();
+        let del_start = start.col == self.lines[start.row].len();
+        let del_end = end.col == self.lines[end.row].len();
 
-        match (delete_start_line, delete_end_line, start.row == end.row) {
-            (true, true, true) => {
-                if start.row + 1 < self.lines.len() {
-                    let next_line = self.lines.remove(start.row + 1);
-                    self.lines[start.row].push_str(&next_line);
-                }
+        if start.row == end.row {
+            if !del_start {
+                self.lines[start.row].drain(start.col..end.col + if del_end { 0 } else { 1 });
             }
-            (true, false, true) => panic!("This should be impossible!"),
-            (false, true, true) => {
-                self.lines[start.row].drain(start.col..=end.col - 1);
 
-                if start.row + 1 < self.lines.len() {
-                    let next_line = self.lines.remove(start.row + 1);
-                    self.lines[start.row].push_str(&next_line);
-                }
+            if del_end && start.row + 1 < self.lines.len() {
+                let next_line = self.lines.remove(start.row + 1);
+                self.lines[start.row].push_str(&next_line);
             }
-            (false, false, true) => {
-                self.lines[start.row].drain(start.col..=end.col);
-            }
-            (true, true, false) => {
-                for _ in start.row + 1..=end.row {
-                    self.lines.remove(start.row + 1);
-                }
+            return;
+        }
 
-                if start.row + 1 < self.lines.len() {
-                    let next_line = self.lines.remove(start.row + 1);
-                    self.lines[start.row].push_str(&next_line);
-                }
-            }
-            (true, false, false) => {
-                for _ in start.row + 1..end.row {
-                    self.lines.remove(start.row + 1);
-                }
+        if !del_start {
+            self.lines[start.row].drain(start.col..);
+        }
 
-                self.lines[start.row + 1].drain(..end.col);
+        self.lines[end.row].drain(..end.col + if del_end { 0 } else { 1 });
 
-                if start.row + 1 < self.lines.len() {
-                    let next_line = self.lines.remove(start.row + 1);
-                    self.lines[start.row].push_str(&next_line);
-                }
-            }
-            (false, true, false) => {
-                for _ in start.row + 1..=end.row {
-                    self.lines.remove(start.row + 1);
-                }
+        for _ in start.row + 1..end.row + if del_end { 1 } else { 0 } {
+            self.lines.remove(start.row + 1);
+        }
 
-                self.lines[start.row].drain(start.col..);
-
-                if start.row + 1 < self.lines.len() {
-                    let next_line = self.lines.remove(start.row + 1);
-                    self.lines[start.row].push_str(&next_line);
-                }
-            }
-            (false, false, false) => {
-                self.lines[start.row].drain(start.col..);
-                self.lines[end.row].drain(..=end.col);
-
-                for _ in start.row + 1..end.row {
-                    self.lines.remove(start.row + 1);
-                }
-
-                if start.row + 1 < self.lines.len() {
-                    let next_line = self.lines.remove(start.row + 1);
-                    self.lines[start.row].push_str(&next_line);
-                }
-            }
+        if start.row + 1 < self.lines.len() {
+            let next_line = self.lines.remove(start.row + 1);
+            self.lines[start.row].push_str(&next_line);
         }
     }
 
@@ -244,7 +203,7 @@ mod tests {
 
         doc.delete(start, end);
 
-        assert_eq!(doc.lines, vec!["asdfdf".to_owned(), "asdf".to_owned()]);
+        assert_eq!(doc.lines, vec!["asdff".to_owned(), "asdf".to_owned()]);
     }
 
     #[test]

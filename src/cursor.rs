@@ -22,6 +22,8 @@ impl Cursor {
     }
 
     pub fn build(&self, doc: &Document, viewport: &Viewport, mode: Mode) -> String {
+        use Mode::*;
+
         let mut building = String::new();
 
         let col = min(self.col, doc.col_bound(self.row, mode));
@@ -33,12 +35,9 @@ impl Cursor {
         ));
 
         let mode = match mode {
-            Mode::Normal => CURSOR_BLOCK,
-            Mode::Visual(_) => CURSOR_BLOCK,
-            Mode::Undo => CURSOR_BLOCK,
-            Mode::Replace => CURSOR_UNDERLINE,
-            Mode::Delete => CURSOR_UNDERLINE,
-            Mode::Insert => CURSOR_BAR,
+            Normal | Visual(_) | Undo => CURSOR_BLOCK,
+            Replace | Delete => CURSOR_UNDERLINE,
+            Insert => CURSOR_BAR,
         };
 
         building.push_str(&format!("\x1b[{} q", mode));
@@ -46,58 +45,78 @@ impl Cursor {
         building
     }
 
-    pub fn bound_col(&mut self, doc: &Document, mode: Mode) {
+    pub fn bound_col(&mut self, doc: &Document, mode: Mode) -> &mut Self {
         self.col = max(min(self.col, doc.col_bound(self.row, mode)), 0);
+
+        self
     }
 
-    pub fn bound_row(&mut self, doc: &Document) {
+    pub fn bound_row(&mut self, doc: &Document) -> &mut Self {
         self.row = max(min(self.row, doc.row_bound()), 0);
+
+        self
     }
 
-    pub fn left(&mut self, doc: &Document) {
+    pub fn left(&mut self, doc: &Document) -> &mut Self {
         self.bound_col(doc, Mode::Normal);
 
         if self.col > 0 {
             self.col -= 1;
         }
+
+        self
     }
 
-    pub fn right(&mut self, doc: &Document, mode: Mode) {
+    pub fn right(&mut self, doc: &Document, mode: Mode) -> &mut Self {
         self.col += 1;
         self.bound_col(doc, mode);
+
+        self
     }
 
-    pub fn down(&mut self, doc: &Document) {
+    pub fn down(&mut self, doc: &Document) -> &mut Self {
         self.row += 1;
         self.bound_row(doc);
+
+        self
     }
 
-    pub fn up(&mut self) {
+    pub fn up(&mut self) -> &mut Self {
         if self.row > 0 {
             self.row -= 1;
         }
+
+        self
     }
 
-    pub fn go_to_first_line(&mut self) {
+    pub fn go_to_first_line(&mut self) -> &mut Self {
         self.row = 0;
+
+        self
     }
 
-    pub fn go_to_last_char(&mut self, doc: &Document) {
+    pub fn go_to_last_char(&mut self, doc: &Document) -> &mut Self {
         self.row = doc.row_bound();
         self.col = doc.col_bound(self.row, Mode::Normal);
+
+        self
     }
 
-    pub fn go_to_start_of_line(&mut self, doc: &Document) {
+    pub fn go_to_start_of_line(&mut self, doc: &Document) -> &mut Self {
         self.col = doc.get_content()[self.row]
             .chars()
             .enumerate()
             .find(|(_, ch)| *ch != ' ')
             .map(|(idx, _)| idx)
             .unwrap_or(0);
+
+        self
     }
 
-    pub fn go_to_end_of_line(&mut self, doc: &Document, mode: Mode) {
+    pub fn go_to_end_of_line(&mut self, doc: &Document, mode: Mode) -> &mut Self {
         self.col = doc.col_bound(self.row, mode);
+
+        self
     }
 
     pub fn to_pos(&self) -> Pos {

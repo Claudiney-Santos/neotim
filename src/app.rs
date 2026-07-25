@@ -80,7 +80,7 @@ impl App {
             (Mode::Normal, 'A') => cursor.go_to_end_of_line(doc, mode.set(Insert)),
             (Mode::Normal, 's') => {
                 mode.set(Insert);
-                doc.remove_char(cursor.col, cursor.row);
+                doc.delete(cursor.to_pos(), cursor.to_pos());
             }
             (Mode::Normal, 'a') => {
                 mode.set(Insert);

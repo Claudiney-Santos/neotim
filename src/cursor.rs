@@ -97,17 +97,7 @@ impl Cursor {
     }
 
     pub fn go_to_end_of_line(&mut self, doc: &Document, mode: Mode) {
-        let last_char_col = doc.get_content()[self.row]
-            .chars()
-            .enumerate()
-            .last()
-            .map(|(idx, _)| idx)
-            .unwrap_or(0);
-
-        self.col = match mode {
-            Mode::Insert => last_char_col + 1,
-            _ => last_char_col,
-        }
+        self.col = doc.col_bound(self.row, mode);
     }
 
     pub fn to_pos(&self) -> Pos {

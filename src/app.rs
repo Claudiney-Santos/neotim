@@ -1,6 +1,6 @@
 use std::io::{self, Read, stdin};
 
-use crate::{BACKSPACE, ESC, cursor::Cursor, document::Document, viewport::Viewport};
+use crate::{BACKSPACE, ENTER, ESC, cursor::Cursor, document::Document, viewport::Viewport};
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum Mode {
@@ -53,11 +53,21 @@ impl App {
         match (*mode, key) {
             (Normal | Visual(_), 'Q') => return Ok(false),
             (Normal | Visual(_), 'W') => doc.save()?,
-            (Normal | Visual(_), 'h') => cursor.left(doc),
-            (Normal | Visual(_), 'j') => cursor.down(doc),
-            (Normal | Visual(_), 'k') => cursor.up(),
-            (Normal | Visual(_), 'l') => cursor.right(doc, *mode),
-            (Mode::Normal, 'i') => cursor.bound_col(doc, mode.set(Insert)),
+            (Normal | Visual(_), 'h') => {
+                cursor.left(doc);
+            }
+            (Normal | Visual(_), 'j') => {
+                cursor.down(doc);
+            }
+            (Normal | Visual(_), 'k') => {
+                cursor.up();
+            }
+            (Normal | Visual(_), 'l') => {
+                cursor.right(doc, *mode);
+            }
+            (Normal, 'i') => {
+                cursor.bound_col(doc, mode.set(Insert));
+            }
             // (Mode::Normal, 'u') => {
             //     context.undo_stack.pop().map(|mut undo| {
             //         undo.delta.reverse();
@@ -70,33 +80,28 @@ impl App {
             //         context.mode = Mode::Undo;
             //     });
             // }
-            (Mode::Normal, 'I') => {
+            (Normal, 'I') => {
                 mode.set(Insert);
                 cursor.go_to_start_of_line(doc);
             }
             // (Mode::Normal | Mode::Visual(_), 'w') => cursor.go_to_next_word(screen),
             // (Mode::Normal | Mode::Visual(_), 'b') => cursor.go_to_prev_word(screen),
             // (Mode::Normal | Mode::Visual(_), 'e') => cursor.go_to_last_char_of_next_word(screen),
-            (Mode::Normal, 'A') => cursor.go_to_end_of_line(doc, mode.set(Insert)),
-            (Mode::Normal, 's') => {
+            (Normal, 'A') => {
+                cursor.go_to_end_of_line(doc, mode.set(Insert));
+            }
+            (Normal, 's') => {
                 mode.set(Insert);
                 doc.delete(cursor.to_pos(), cursor.to_pos());
             }
-            (Mode::Normal, 'a') => {
+            (Normal, 'a') => {
                 mode.set(Insert);
                 cursor.right(doc, self.mode);
             }
-            (Mode::Normal, 'o') => {
+            (Normal, 'o') => {
                 mode.set(Insert);
                 doc.insert_line(cursor.row + 1);
                 cursor.down(doc);
-                // if cursor.y < screen.line_count {
-                //     move_block_vertically(screen, cursor.y + 1, screen.line_count - cursor.y, 1)?;
-                // }
-                //
-                // cursor.x = 0;
-                // cursor.y += 1;
-                // context.mode = Mode::Insert;
             }
             // (Mode::Replace, char) => {
             //     let i = cursor.y * screen.width + cursor.x;
@@ -130,7 +135,9 @@ impl App {
             //     context.mode = Mode::Normal;
             //     cursor.reset(screen, context.mode);
             // }
-            (Mode::Insert, ESC) => cursor.bound_col(doc, mode.set(Normal)),
+            (Insert, ESC) => {
+                cursor.bound_col(doc, mode.set(Normal));
+            }
             // (Mode::Visual(landmark), 'D') => {
             //     let cursor_raw = cursor.y * screen.width + cursor.x;
             //     let start = min(*landmark, cursor_raw);
@@ -212,7 +219,7 @@ impl App {
             // (Mode::Normal, 'd') => {
             //     context.mode = Mode::Delete;
             // }
-            (Mode::Normal, 'g') => {
+            (Normal, 'g') => {
                 let key = get_key_pressed()?;
 
                 if key != 'g' {
@@ -221,34 +228,31 @@ impl App {
 
                 cursor.go_to_first_line();
             }
-            (Mode::Normal | Mode::Visual(_), 'G') => {
+            (Normal | Mode::Visual(_), 'G') => {
                 cursor.go_to_last_char(doc);
             }
-            // (Mode::Normal, ENTER) => {
-            //     cursor.down(screen);
-            //     cursor.go_to_line_start(screen);
-            // }
-            // (Mode::Normal, BACKSPACE) => {
-            //     if cursor.x == 0 {
-            //         cursor.up(screen);
-            //         cursor.go_to_line_end(screen, context.mode);
-            //     } else {
-            //         cursor.left(screen, context.mode);
-            //     }
-            // }
-            // (Mode::Insert, ENTER) => {
-            //     break_line(screen, cursor.x, cursor.y)?;
-            //     cursor.x = 0;
-            //     cursor.y += 1;
-            // }
-            (Mode::Insert, BACKSPACE) => {
+            (Normal, ENTER) => {
+                cursor.down(doc).go_to_start_of_line(doc);
+            }
+            (Normal, BACKSPACE) => {
+                if cursor.col == 0 {
+                    cursor.up().go_to_end_of_line(doc, *mode);
+                    return Ok(true);
+                }
+
+                cursor.left(doc);
+            }
+            (Insert, ENTER) => {
+                doc.insert(cursor.to_pos(), "\n");
+                cursor.down(doc);
+            }
+            (Insert, BACKSPACE) => {
                 if cursor.row == 0 && cursor.col == 0 {
                     return Ok(true);
                 }
 
                 if cursor.col == 0 {
-                    cursor.up();
-                    cursor.go_to_end_of_line(doc, Insert);
+                    cursor.up().go_to_end_of_line(doc, Insert);
                     doc.delete(cursor.to_pos(), cursor.to_pos());
                     return Ok(true);
                 }
@@ -256,8 +260,8 @@ impl App {
                 cursor.left(doc);
                 doc.delete(cursor.to_pos(), cursor.to_pos());
             }
-            (Mode::Insert, ch) if ch.is_control() => {}
-            (Mode::Insert, ch) => {
+            (Insert, ch) if ch.is_control() => {}
+            (Insert, ch) => {
                 doc.insert(cursor.to_pos(), &ch.to_string());
                 cursor.right(doc, *mode);
             }

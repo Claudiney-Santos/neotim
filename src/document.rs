@@ -1,7 +1,7 @@
 // TODO: create document struct
 // Its responsability is handle the reading, updating, and writing file document
 
-use std::cmp::{max, min};
+use std::cmp::max;
 use std::{
     env, fs,
     io::{self},
@@ -45,10 +45,6 @@ impl Document {
 
     pub fn insert(&mut self, col: usize, row: usize, str: &str) {
         self.lines[row].insert_str(col, str)
-    }
-
-    pub fn remove_char(&mut self, col: usize, row: usize) {
-        self.lines[row].remove(col);
     }
 
     pub fn delete(&mut self, start: Pos, end: Pos) {

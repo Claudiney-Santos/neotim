@@ -103,18 +103,17 @@ impl App {
                 doc.insert_line(cursor.row + 1);
                 cursor.down(doc);
             }
-            // (Mode::Replace, char) => {
-            //     let i = cursor.y * screen.width + cursor.x;
-            //
-            //     if !char.is_control() {
-            //         screen.cells[i] = Cell::new(key);
-            //     }
-            //
-            //     context.mode = Mode::Normal;
-            // }
-            // (Mode::Normal, 'r') => {
-            //     context.mode = Mode::Replace;
-            // }
+            (Mode::Replace, ch) => {
+                if !ch.is_control() {
+                    doc.delete(cursor.to_pos(), cursor.to_pos());
+                    doc.insert(cursor.to_pos(), &ch.to_string());
+                }
+
+                mode.set(Normal);
+            }
+            (Normal, 'r') => {
+                mode.set(Replace);
+            }
             // (Mode::Normal, 'x') => {
             //     if screen.line_len(cursor.y) > 0 {
             //         cursor.right(screen, Mode::Insert);

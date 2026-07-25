@@ -258,7 +258,7 @@ impl App {
             }
             (Mode::Insert, ch) if ch.is_control() => {}
             (Mode::Insert, ch) => {
-                doc.insert(cursor.col, cursor.row, &ch.to_string());
+                doc.insert(cursor.to_pos(), &ch.to_string());
                 cursor.right(doc, *mode);
             }
             _ => {}

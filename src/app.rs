@@ -89,9 +89,15 @@ impl App {
                 mode.set(Insert);
                 cursor.go_to_start_of_line(doc);
             }
-            // (Mode::Normal | Mode::Visual(_), 'w') => cursor.go_to_next_word(screen),
-            // (Mode::Normal | Mode::Visual(_), 'b') => cursor.go_to_prev_word(screen),
-            // (Mode::Normal | Mode::Visual(_), 'e') => cursor.go_to_last_char_of_next_word(screen),
+            (Normal | Visual(_), 'w') => {
+                cursor.go_to_pos(doc.next_word(cursor.to_pos()));
+            }
+            (Normal | Visual(_), 'b') => {
+                cursor.go_to_pos(doc.prev_word(cursor.to_pos()));
+            }
+            (Normal | Visual(_), 'e') => {
+                cursor.go_to_pos(doc.last_char_of_next_word(cursor.to_pos()));
+            }
             (Normal, 'A') => {
                 cursor.go_to_end_of_line(doc, mode.set(Insert));
             }

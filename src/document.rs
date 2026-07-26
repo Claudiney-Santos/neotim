@@ -109,6 +109,140 @@ impl Document {
     pub fn row_bound(&self) -> usize {
         max(self.lines.len() as isize - 2, 0) as usize
     }
+
+    pub fn next_word(&self, pos: Pos) -> Pos {
+        let chars = self.indexed_chars();
+        let Some(mut idx) = self.pos_idx(pos, &chars) else {
+            return pos;
+        };
+
+        let state = CharState::from(chars[idx].1);
+
+        while idx < chars.len() - 1 && state.matches(chars[idx].1) {
+            idx += 1;
+        }
+
+        while idx < chars.len() - 1 && chars[idx].1.is_whitespace() {
+            idx += 1;
+        }
+
+        chars[idx].0
+    }
+
+    pub fn prev_word(&self, pos: Pos) -> Pos {
+        let chars = self.indexed_chars();
+        let Some(idx) = self.pos_idx(pos, &chars) else {
+            return pos;
+        };
+
+        if idx == 0 {
+            return chars[idx].0;
+        }
+
+        let mut idx = idx - 1;
+
+        while idx > 0 && chars[idx].1.is_whitespace() {
+            idx -= 1;
+        }
+
+        let state = CharState::from(chars[idx].1);
+
+        while idx > 0 && state.matches(chars[idx - 1].1) {
+            idx -= 1;
+        }
+
+        chars[idx].0
+    }
+
+    pub fn last_char_of_next_word(&self, pos: Pos) -> Pos {
+        let chars = self.indexed_chars();
+        let Some(mut idx) = self.pos_idx(pos, &chars) else {
+            return pos;
+        };
+
+        if idx < chars.len() - 1 {
+            idx += 1;
+        }
+
+        while idx < chars.len() - 1 && chars[idx].1.is_whitespace() {
+            idx += 1;
+        }
+
+        let state = CharState::from(chars[idx].1);
+
+        while idx < chars.len() - 1 && state.matches(chars[idx + 1].1) {
+            idx += 1;
+        }
+
+        chars[idx].0
+    }
+
+    fn indexed_chars(&self) -> Vec<(Pos, char)> {
+        let mut chars = Vec::new();
+
+        for (row, line) in self.lines.iter().enumerate() {
+            for (col, ch) in line.chars().enumerate() {
+                chars.push((Pos { row, col }, ch));
+            }
+
+            if row + 1 < self.lines.len() {
+                chars.push((
+                    Pos {
+                        row,
+                        col: line.chars().count(),
+                    },
+                    '\n',
+                ));
+            }
+        }
+
+        if chars.is_empty() {
+            chars.push((Pos { row: 0, col: 0 }, '\n'));
+        }
+
+        chars
+    }
+
+    fn pos_idx(&self, pos: Pos, chars: &[(Pos, char)]) -> Option<usize> {
+        if self.lines.is_empty() {
+            return chars.len().checked_sub(1);
+        }
+
+        let row = pos.row.min(self.lines.len().saturating_sub(1));
+        let col = pos.col.min(self.lines[row].chars().count());
+        let bounded_pos = Pos { row, col };
+
+        chars
+            .iter()
+            .position(|(char_pos, _)| *char_pos == bounded_pos)
+            .or_else(|| chars.len().checked_sub(1))
+    }
+}
+
+enum CharState {
+    Alphabetic,
+    NonAlphabetic,
+    WhiteSpace,
+}
+
+impl CharState {
+    fn from(ch: char) -> Self {
+        if ch.is_alphanumeric() {
+            Self::Alphabetic
+        } else if ch.is_whitespace() {
+            Self::WhiteSpace
+        } else {
+            Self::NonAlphabetic
+        }
+    }
+
+    fn matches(&self, ch: char) -> bool {
+        match self {
+            Self::Alphabetic => ch.is_alphanumeric(),
+            Self::NonAlphabetic => !ch.is_alphanumeric() && !ch.is_whitespace(),
+            Self::WhiteSpace => ch.is_whitespace(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -307,6 +441,87 @@ mod tests {
         assert_eq!(
             doc.lines,
             vec!["asdf123".to_owned(), "".to_owned(), "----".to_owned()]
+        );
+    }
+
+    #[test]
+    fn it_goes_to_next_word_on_same_line() {
+        let doc = Document {
+            file_path: "ti.ti".to_owned(),
+            lines: vec!["one two".to_owned()],
+        };
+
+        assert_eq!(
+            doc.next_word(Pos { row: 0, col: 0 }),
+            Pos { row: 0, col: 4 }
+        );
+    }
+
+    #[test]
+    fn it_goes_to_next_word_across_lines() {
+        let doc = Document {
+            file_path: "ti.ti".to_owned(),
+            lines: vec!["one".to_owned(), "two".to_owned()],
+        };
+
+        assert_eq!(
+            doc.next_word(Pos { row: 0, col: 1 }),
+            Pos { row: 1, col: 0 }
+        );
+    }
+
+    #[test]
+    fn it_goes_to_previous_word_across_lines() {
+        let doc = Document {
+            file_path: "ti.ti".to_owned(),
+            lines: vec!["one".to_owned(), "two".to_owned()],
+        };
+
+        assert_eq!(
+            doc.prev_word(Pos { row: 1, col: 1 }),
+            Pos { row: 1, col: 0 }
+        );
+        assert_eq!(
+            doc.prev_word(Pos { row: 1, col: 0 }),
+            Pos { row: 0, col: 0 }
+        );
+    }
+
+    #[test]
+    fn it_goes_to_last_char_of_next_word() {
+        let doc = Document {
+            file_path: "ti.ti".to_owned(),
+            lines: vec!["one two".to_owned()],
+        };
+
+        assert_eq!(
+            doc.last_char_of_next_word(Pos { row: 0, col: 0 }),
+            Pos { row: 0, col: 2 }
+        );
+        assert_eq!(
+            doc.last_char_of_next_word(Pos { row: 0, col: 2 }),
+            Pos { row: 0, col: 6 }
+        );
+    }
+
+    #[test]
+    fn it_treats_punctuation_as_word_motion_group() {
+        let doc = Document {
+            file_path: "ti.ti".to_owned(),
+            lines: vec!["one... two".to_owned()],
+        };
+
+        assert_eq!(
+            doc.next_word(Pos { row: 0, col: 0 }),
+            Pos { row: 0, col: 3 }
+        );
+        assert_eq!(
+            doc.next_word(Pos { row: 0, col: 3 }),
+            Pos { row: 0, col: 7 }
+        );
+        assert_eq!(
+            doc.last_char_of_next_word(Pos { row: 0, col: 2 }),
+            Pos { row: 0, col: 5 }
         );
     }
 }

@@ -1,6 +1,3 @@
-// TODO: create the viewport #[derive(Debug)]
-// Its responsability is to define the boundaries of document rendering on terminal
-
 const ROW_DISTANCE: usize = 4;
 const COL_DISTANCE: usize = 6;
 

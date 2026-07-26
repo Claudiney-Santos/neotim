@@ -1,5 +1,3 @@
-// TODO: create the render_buffer
-// Its reponsabity is result on the final string that modifies the terminal content
 use crate::{
     HIDE_CURSOR, SHOW_CURSOR,
     app::{App, Mode},

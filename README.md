@@ -1,10 +1,10 @@
 # Ti
 
-Toy vim like text editor
+Toy vi like text editor
 
 ## Next Steps
 - [X] Finish refactor
-- [ ] Implement viewport
+- [X] Implement viewport
 - [ ] Implement visual mode
 - [ ] Support implement copy, cut and paste
 - [ ] Support unicode

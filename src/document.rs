@@ -1,6 +1,3 @@
-// TODO: create document struct
-// Its responsability is handle the reading, updating, and writing file document
-
 use std::cmp::max;
 use std::{
     env, fs,

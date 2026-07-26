@@ -103,7 +103,7 @@ impl App {
                 doc.insert_line(cursor.row + 1);
                 cursor.down(doc);
             }
-            (Mode::Replace, ch) => {
+            (Replace, ch) => {
                 if !ch.is_control() {
                     doc.delete(cursor.to_pos(), cursor.to_pos());
                     doc.insert(cursor.to_pos(), &ch.to_string());
@@ -114,12 +114,11 @@ impl App {
             (Normal, 'r') => {
                 mode.set(Replace);
             }
-            // (Mode::Normal, 'x') => {
-            //     if screen.line_len(cursor.y) > 0 {
-            //         cursor.right(screen, Mode::Insert);
-            //         backspace(screen, cursor)?;
-            //     }
-            // }
+            (Normal, 'x') => {
+                doc.delete(cursor.to_pos(), cursor.to_pos());
+                cursor.bound_col(doc, *mode);
+            }
+
             // (Mode::Normal, 'v') => {
             //     context.mode = Mode::Visual(cursor.y * screen.width + cursor.x);
             // }
@@ -227,7 +226,7 @@ impl App {
 
                 cursor.go_to_first_line();
             }
-            (Normal | Mode::Visual(_), 'G') => {
+            (Normal | Visual(_), 'G') => {
                 cursor.go_to_last_char(doc);
             }
             (Normal, ENTER) => {

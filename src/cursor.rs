@@ -264,23 +264,3 @@ impl Cursor {
 //         self.y = (idx + step) / screen.width;
 //     }
 // }
-//
-// fn is_whitespace(c: char) -> bool {
-//     c == ' ' || c == '·'
-// }
-//
-// pub fn x_bounded(x: isize, y: usize, screen: &ScreenBuffer, mode: Mode) -> usize {
-//     let base_bound = max(screen.line_len(y) as isize - 1, 0) as usize;
-//
-//     let bound = match (mode, screen.line_len(y)) {
-//         (Mode::Insert, 0) => 0,
-//         (Mode::Insert, _) => base_bound + 1,
-//         _ => base_bound,
-//     };
-//
-//     max(min(bound as isize, x), 0) as usize
-// }
-//
-// pub fn y_bounded(y: isize, screen: &ScreenBuffer) -> usize {
-//     max(min(screen.line_count as isize - 1, y), 0) as usize
-//    }

@@ -35,7 +35,7 @@ impl Cursor {
         ));
 
         let mode = match mode {
-            Normal | Visual(_) | Undo => CURSOR_BLOCK,
+            Normal | Visual(_) => CURSOR_BLOCK,
             Replace | Delete => CURSOR_UNDERLINE,
             Insert => CURSOR_BAR,
         };

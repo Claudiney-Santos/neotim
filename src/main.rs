@@ -29,11 +29,12 @@ fn main() -> anyhow::Result<()> {
     print!("{CLEAR_SCREEN}");
 
     let mut front_buffer = RenderBuffer::new();
-    let mut back_buffer: RenderBuffer;
+    let mut back_buffer = RenderBuffer::from(&app);
+
+    app.undo
+        .push(app.doc.snapshot(), app.cursor.clone(), app.mode);
 
     loop {
-        back_buffer = RenderBuffer::from(&app);
-
         let diff = back_buffer.diff(&front_buffer);
 
         prin!(
@@ -47,6 +48,8 @@ fn main() -> anyhow::Result<()> {
         if !app.handle_input(get_key_pressed()?)? {
             break;
         }
+
+        back_buffer = RenderBuffer::from(&app);
     }
 
     print!("{CLEAR_SCREEN}");

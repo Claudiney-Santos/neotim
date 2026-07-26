@@ -13,7 +13,7 @@ pub enum Mode {
     Replace,
     Delete,
     Insert,
-    Visual(usize),
+    Visual(Pos),
     Undo,
 }
 
@@ -127,71 +127,45 @@ impl App {
             (Insert, ESC) => {
                 cursor.bound_col(doc, mode.set(Normal));
             }
-            // (Mode::Normal, 'v') => {
-            //     context.mode = Mode::Visual(cursor.y * screen.width + cursor.x);
-            // }
-            // (Mode::Visual(landmark), ESC) => {
-            //     let idx = cursor.y * screen.width + cursor.x;
-            //     let start = min(idx, *landmark);
-            //     let end = max(idx, *landmark);
-            //
-            //     for i in start..end {
-            //         screen.cells[i].highlight = false;
-            //     }
-            //     context.mode = Mode::Normal;
-            //     cursor.reset(screen, context.mode);
-            // }
-            // (Mode::Visual(landmark), 'D') => {
-            //     let cursor_raw = cursor.y * screen.width + cursor.x;
-            //     let start = min(*landmark, cursor_raw);
-            //     let end = max(*landmark, cursor_raw);
-            //
-            //     for i in start..end {
-            //         screen.cells[i].highlight = false;
-            //     }
-            //
-            //     let start = Pos::from_raw(start, screen.width);
-            //     let end = Pos::from_raw(end, screen.width);
-            //
-            //     move_block_vertically(
-            //         screen,
-            //         end.y + 1,
-            //         screen.line_count - (end.y + 1),
-            //         start.y as isize - (end.y as isize + 1),
-            //     )?;
-            //
-            //     *cursor = start.into();
-            //     context.prev_cursor = start.into();
-            //     context.mode = Mode::Normal;
-            //     cursor.reset(screen, context.mode);
-            // }
-            // (Mode::Visual(landmark), 'd') => {
-            //     let cursor_raw = cursor.y * screen.width + cursor.x;
-            //     let start = min(*landmark, cursor_raw);
-            //     let end = max(*landmark, cursor_raw);
-            //
-            //     for i in start..end {
-            //         screen.cells[i].highlight = false;
-            //     }
-            //
-            //     let content = cut(screen, end + 1, end + screen.width - (end % screen.width));
-            //     paste(screen, start, content);
-            //
-            //     let start = Pos::from_raw(start, screen.width);
-            //     let end = Pos::from_raw(end, screen.width);
-            //
-            //     move_block_vertically(
-            //         screen,
-            //         end.y + 1,
-            //         screen.line_count - end.y,
-            //         start.y as isize - end.y as isize,
-            //     )?;
-            //
-            //     *cursor = start.into();
-            //     context.prev_cursor = start.into();
-            //     context.mode = Mode::Normal;
-            //     cursor.reset(screen, context.mode);
-            // }
+            (Normal, 'v') => {
+                mode.set(Visual(cursor.to_pos()));
+            }
+            (Visual(_), ESC) => {
+                mode.set(Normal);
+            }
+            (Visual(landmark), 'D') => {
+                let cursor_pos = cursor.clone().bound_col(doc, *mode).to_pos();
+
+                let (mut start, mut end) = if landmark.row < cursor_pos.row
+                    || (landmark.row == cursor_pos.row && landmark.col <= cursor_pos.col)
+                {
+                    (landmark, cursor_pos)
+                } else {
+                    (cursor_pos, landmark)
+                };
+
+                start.col = 0;
+                end.col = doc.col_bound(end.row, *mode);
+
+                doc.delete(start, end);
+                cursor.bound_row(doc).bound_col(doc, *mode);
+                mode.set(Normal);
+            }
+            (Visual(landmark), 'd') => {
+                let cursor_pos = cursor.clone().bound_col(doc, *mode).to_pos();
+
+                let (start, end) = if landmark.row < cursor_pos.row
+                    || (landmark.row == cursor_pos.row && landmark.col <= cursor_pos.col)
+                {
+                    (landmark, cursor_pos)
+                } else {
+                    (cursor_pos, landmark)
+                };
+
+                doc.delete(start, end);
+                cursor.go_to_pos(start).bound_row(doc).bound_col(doc, *mode);
+                mode.set(Normal);
+            }
             (Delete, 'd') => {
                 let start = Pos {
                     row: cursor.row,

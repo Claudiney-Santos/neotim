@@ -125,6 +125,13 @@ impl Cursor {
             col: self.col,
         }
     }
+
+    pub fn go_to_pos(&mut self, pos: Pos) -> &mut Self {
+        self.row = pos.row;
+        self.col = pos.col;
+
+        self
+    }
 }
 //     pub fn go_to_next_word(&mut self, screen: &ScreenBuffer) {
 //         let mut idx = self.y * screen.width + self.x;

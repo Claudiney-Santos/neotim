@@ -32,7 +32,7 @@ fn main() -> anyhow::Result<()> {
     let mut back_buffer: RenderBuffer;
 
     loop {
-        back_buffer = RenderBuffer::from(&app.doc, &app.viewport);
+        back_buffer = RenderBuffer::from(&app);
 
         let diff = back_buffer.diff(&front_buffer);
 

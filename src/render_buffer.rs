@@ -1,7 +1,9 @@
 // TODO: create the render_buffer
 // Its reponsabity is result on the final string that modifies the terminal content
 use crate::{
-    HIDE_CURSOR, SHOW_CURSOR, document::Document, terminal::get_terminal_size, viewport::Viewport,
+    HIDE_CURSOR, SHOW_CURSOR,
+    app::{App, Mode},
+    terminal::get_terminal_size,
 };
 
 #[derive(Clone, PartialEq, Copy, Debug)]
@@ -49,17 +51,40 @@ impl RenderBuffer {
         }
     }
 
-    pub fn from(doc: &Document, viewport: &Viewport) -> Self {
+    pub fn from(
+        App {
+            doc,
+            viewport,
+            mode,
+            cursor,
+        }: &App,
+    ) -> Self {
         let mut render_buffer = Self::new();
 
         for (row, line) in doc.get_content().iter().skip(viewport.top_row).enumerate() {
-            for (col, ch) in line
+            for (col, char) in line
                 .chars()
                 .skip(viewport.left_column)
                 .map(|ch| if ch != ' ' { ch } else { '·' })
                 .enumerate()
             {
-                render_buffer.cells[row * viewport.width + col].char = ch;
+                let highlight = match mode {
+                    Mode::Visual(landmark) => {
+                        let (start, end) = if landmark.row < cursor.row
+                            || (landmark.row == cursor.row && landmark.col <= cursor.col)
+                        {
+                            (*landmark, cursor.to_pos())
+                        } else {
+                            (cursor.to_pos(), *landmark)
+                        };
+
+                        (start.row < row || (start.row == row && start.col <= col))
+                            && (row < end.row || (row == end.row && col <= end.col))
+                    }
+                    _ => false,
+                };
+
+                render_buffer.cells[row * viewport.width + col] = Cell { char, highlight };
             }
         }
 

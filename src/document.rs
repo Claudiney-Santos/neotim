@@ -9,7 +9,7 @@ use std::{
 
 use crate::{app::Mode, error::TiError};
 
-#[derive(Clone)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Pos {
     pub row: usize,
     pub col: usize,
@@ -101,7 +101,7 @@ impl Document {
 
     pub fn col_bound(&self, row: usize, mode: Mode) -> usize {
         match mode {
-            Mode::Insert => self.lines[row].len(),
+            Mode::Insert | Mode::Visual(_) => self.lines[row].len(),
             _ => max(self.lines[row].len() as isize - 1, 0) as usize,
         }
     }

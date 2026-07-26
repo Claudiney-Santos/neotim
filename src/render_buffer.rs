@@ -77,13 +77,16 @@ impl RenderBuffer {
             {
                 let highlight = match mode {
                     Mode::Visual(landmark) => {
-                        let (start, end) = if landmark.row < cursor.row
+                        let (mut start, mut end) = if landmark.row < cursor.row
                             || (landmark.row == cursor.row && landmark.col <= cursor.col)
                         {
                             (*landmark, cursor.to_pos())
                         } else {
                             (cursor.to_pos(), *landmark)
                         };
+
+                        start.row -= viewport.top_row;
+                        end.row -= viewport.top_row;
 
                         (start.row < row || (start.row == row && start.col <= col))
                             && (row < end.row || (row == end.row && col <= end.col))

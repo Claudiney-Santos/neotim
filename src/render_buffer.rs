@@ -57,6 +57,7 @@ impl RenderBuffer {
             viewport,
             mode,
             cursor,
+            ..
         }: &App,
     ) -> Self {
         let mut render_buffer = Self::new();

@@ -4,6 +4,7 @@ use crate::{
     BACKSPACE, ENTER, ESC,
     cursor::Cursor,
     document::{Document, Pos},
+    undo::UndoStack,
     viewport::Viewport,
 };
 
@@ -14,7 +15,6 @@ pub enum Mode {
     Delete,
     Insert,
     Visual(Pos),
-    Undo,
 }
 
 impl Mode {
@@ -29,6 +29,7 @@ pub struct App {
     pub viewport: Viewport,
     pub cursor: Cursor,
     pub mode: Mode,
+    pub undo: UndoStack,
 }
 
 pub fn get_key_pressed() -> io::Result<char> {
@@ -45,6 +46,7 @@ impl App {
             viewport: Viewport::new(),
             cursor: Cursor::new(),
             mode: Mode::Normal,
+            undo: UndoStack::new(),
         })
     }
 
@@ -52,7 +54,11 @@ impl App {
         use Mode::*;
 
         let App {
-            cursor, doc, mode, ..
+            cursor,
+            doc,
+            mode,
+            undo,
+            ..
         } = self;
 
         match (*mode, key) {
@@ -71,20 +77,16 @@ impl App {
                 cursor.right(doc, *mode);
             }
             (Normal, 'i') => {
+                undo.push(doc.snapshot(), cursor.clone(), *mode);
                 cursor.bound_col(doc, mode.set(Insert));
             }
-            // (Mode::Normal, 'u') => {
-            //     context.undo_stack.pop().map(|mut undo| {
-            //         undo.delta.reverse();
-            //         for (x, y, cell) in undo.delta.iter() {
-            //             screen.cells[y * screen.width + x] = *cell;
-            //         }
-            //         *cursor = undo.cursor;
-            //         screen.line_count = undo.line_count;
-            //
-            //         context.mode = Mode::Undo;
-            //     });
-            // }
+            (Normal | Visual(_), 'u') => {
+                if let Some(snapshot) = undo.pop() {
+                    doc.restore(snapshot.0);
+                    *cursor = snapshot.1;
+                    mode.set(snapshot.2);
+                }
+            }
             (Normal, 'I') => {
                 mode.set(Insert);
                 cursor.go_to_start_of_line(doc);
@@ -99,22 +101,27 @@ impl App {
                 cursor.go_to_pos(doc.last_char_of_next_word(cursor.to_pos()));
             }
             (Normal, 'A') => {
+                undo.push(doc.snapshot(), cursor.clone(), *mode);
                 cursor.go_to_end_of_line(doc, mode.set(Insert));
             }
             (Normal, 's') => {
+                undo.push(doc.snapshot(), cursor.clone(), *mode);
                 mode.set(Insert);
                 doc.delete(cursor.to_pos(), cursor.to_pos());
             }
             (Normal, 'a') => {
+                undo.push(doc.snapshot(), cursor.clone(), *mode);
                 mode.set(Insert);
                 cursor.right(doc, self.mode);
             }
             (Normal, 'o') => {
+                undo.push(doc.snapshot(), cursor.clone(), *mode);
                 mode.set(Insert);
                 doc.insert_line(cursor.row + 1);
                 cursor.down(doc);
             }
             (Replace, ch) => {
+                undo.push(doc.snapshot(), cursor.clone(), *mode);
                 if !ch.is_control() {
                     doc.delete(cursor.to_pos(), cursor.to_pos());
                     doc.insert(cursor.to_pos(), &ch.to_string());
@@ -126,6 +133,7 @@ impl App {
                 mode.set(Replace);
             }
             (Normal, 'x') => {
+                undo.push(doc.snapshot(), cursor.clone(), *mode);
                 doc.delete(cursor.to_pos(), cursor.to_pos());
                 cursor.bound_col(doc, *mode);
             }
@@ -140,6 +148,7 @@ impl App {
                 mode.set(Normal);
             }
             (Visual(landmark), 'D') => {
+                undo.push(doc.snapshot(), cursor.clone(), *mode);
                 let cursor_pos = cursor.clone().bound_col(doc, *mode).to_pos();
 
                 let (mut start, mut end) = if landmark.row < cursor_pos.row
@@ -158,6 +167,7 @@ impl App {
                 mode.set(Normal);
             }
             (Visual(landmark), 'd') => {
+                undo.push(doc.snapshot(), cursor.clone(), *mode);
                 let cursor_pos = cursor.clone().bound_col(doc, *mode).to_pos();
 
                 let (start, end) = if landmark.row < cursor_pos.row
@@ -173,6 +183,7 @@ impl App {
                 mode.set(Normal);
             }
             (Delete, 'd') => {
+                undo.push(doc.snapshot(), cursor.clone(), Normal);
                 let start = Pos {
                     row: cursor.row,
                     col: 0,
@@ -185,6 +196,7 @@ impl App {
                 mode.set(Normal);
             }
             (Delete, 'j') => {
+                undo.push(doc.snapshot(), cursor.clone(), Normal);
                 if doc.row_bound() <= cursor.row {
                     mode.set(Normal);
                     return Ok(true);
@@ -205,6 +217,7 @@ impl App {
                 mode.set(Normal);
             }
             (Delete, 'k') => {
+                undo.push(doc.snapshot(), cursor.clone(), Normal);
                 if cursor.row == 0 {
                     mode.set(Normal);
                     return Ok(true);

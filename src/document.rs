@@ -217,6 +217,14 @@ impl Document {
             .position(|(char_pos, _)| *char_pos == bounded_pos)
             .or_else(|| chars.len().checked_sub(1))
     }
+
+    pub fn snapshot(&self) -> Vec<String> {
+        self.lines.clone()
+    }
+
+    pub fn restore(&mut self, lines: Vec<String>) {
+        self.lines = lines;
+    }
 }
 
 enum CharState {

@@ -1,47 +1,25 @@
-use crate::{app::Mode, cursor::Cursor, render_buffer::Cell};
+use crate::{app::Mode, cursor::Cursor};
 
-const UNDO_STACK_SIZE: usize = 10;
-
-pub struct UndoEntry {
-    pub delta: Vec<(usize, usize, Cell)>,
-    pub cursor: Cursor,
-    pub line_count: usize,
-}
+const MAX_SIZE: usize = 30;
 
 pub struct UndoStack {
-    undos: Vec<UndoEntry>,
-    last_mode: Mode,
+    snapshots: Vec<(Vec<String>, Cursor, Mode)>,
 }
 
 impl UndoStack {
     pub fn new() -> Self {
-        Self {
-            undos: vec![],
-            last_mode: Mode::Normal,
-        }
+        Self { snapshots: vec![] }
     }
 
-    pub fn push(&mut self, mode: Mode, mut entry: UndoEntry) {
-        if mode == Mode::Undo || entry.delta.last().is_none() {
-            return;
+    pub fn push(&mut self, lines: Vec<String>, cursor: Cursor, mode: Mode) {
+        if self.snapshots.len() >= MAX_SIZE {
+            self.snapshots.remove(0);
         }
 
-        if let (Mode::Insert, Mode::Insert, Some(undo)) =
-            (mode, self.last_mode, self.undos.last_mut())
-        {
-            undo.delta.append(&mut entry.delta);
-            return;
-        }
-
-        if self.undos.len() >= UNDO_STACK_SIZE {
-            self.undos.remove(0);
-        }
-
-        self.undos.push(entry);
-        self.last_mode = mode;
+        self.snapshots.push((lines, cursor, mode));
     }
 
-    pub fn pop(&mut self) -> Option<UndoEntry> {
-        self.undos.pop()
+    pub fn pop(&mut self) -> Option<(Vec<String>, Cursor, Mode)> {
+        self.snapshots.pop()
     }
 }

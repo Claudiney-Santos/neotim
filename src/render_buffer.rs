@@ -62,7 +62,13 @@ impl RenderBuffer {
     ) -> Self {
         let mut render_buffer = Self::new();
 
-        for (row, line) in doc.get_content().iter().skip(viewport.top_row).enumerate() {
+        for (row, line) in doc
+            .get_content()
+            .iter()
+            .skip(viewport.top_row)
+            .take(viewport.height)
+            .enumerate()
+        {
             for (col, char) in line
                 .chars()
                 .skip(viewport.left_column)

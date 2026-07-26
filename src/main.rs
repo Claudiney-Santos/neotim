@@ -49,6 +49,8 @@ fn main() -> anyhow::Result<()> {
             break;
         }
 
+        app.viewport.fit(&app.cursor, &app.doc);
+
         back_buffer = RenderBuffer::from(&app);
     }
 

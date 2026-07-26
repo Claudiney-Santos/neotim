@@ -57,9 +57,7 @@ impl Cursor {
         self
     }
 
-    pub fn left(&mut self, doc: &Document) -> &mut Self {
-        self.bound_col(doc, Mode::Normal);
-
+    pub fn left(&mut self) -> &mut Self {
         if self.col > 0 {
             self.col -= 1;
         }

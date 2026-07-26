@@ -65,7 +65,7 @@ impl App {
             (Normal | Visual(_), 'Q') => return Ok(false),
             (Normal | Visual(_), 'W') => doc.save()?,
             (Normal | Visual(_), 'h') => {
-                cursor.left(doc);
+                cursor.bound_col(doc, *mode).left();
             }
             (Normal | Visual(_), 'j') => {
                 cursor.down(doc);
@@ -260,7 +260,7 @@ impl App {
                     return Ok(true);
                 }
 
-                cursor.left(doc);
+                cursor.left();
             }
             (Insert, ENTER) => {
                 doc.insert(cursor.to_pos(), "\n");
@@ -277,7 +277,7 @@ impl App {
                     return Ok(true);
                 }
 
-                cursor.left(doc);
+                cursor.bound_col(doc, *mode).left();
                 doc.delete(cursor.to_pos(), cursor.to_pos());
             }
             (Insert, ch) if ch.is_control() => {}

@@ -55,7 +55,8 @@ impl Document {
         self.lines[pos.row + str.matches("\n").count()].push_str(&rest);
     }
 
-    pub fn delete(&mut self, start: Pos, end: Pos) {
+    pub fn delete(&mut self, start: Pos, end: Pos) -> String {
+        let mut result = String::new();
         assert!(
             start.row < end.row || (start.row == end.row && start.col <= end.col),
             "You messed up with start and end boundaries"
@@ -66,30 +67,49 @@ impl Document {
 
         if start.row == end.row {
             if !del_start {
-                self.lines[start.row].drain(start.col..end.col + if del_end { 0 } else { 1 });
+                result.push_str(
+                    &self.lines[start.row]
+                        .drain(start.col..end.col + if del_end { 0 } else { 1 })
+                        .collect::<String>(),
+                );
+
+                if del_end {
+                    result.push('\n');
+                }
             }
 
             if del_end && start.row + 1 < self.lines.len() {
                 let next_line = self.lines.remove(start.row + 1);
                 self.lines[start.row].push_str(&next_line);
             }
-            return;
+            return result;
         }
 
         if !del_start {
-            self.lines[start.row].drain(start.col..);
+            result.push_str(&format!(
+                "{}\n",
+                self.lines[start.row].drain(start.col..).collect::<String>()
+            ));
         }
 
-        self.lines[end.row].drain(..end.col + if del_end { 0 } else { 1 });
+        let rest = if !del_end {
+            Some(self.lines[end.row].drain(..=end.col).collect::<String>())
+        } else {
+            None
+        };
 
         for _ in start.row + 1..end.row + if del_end { 1 } else { 0 } {
-            self.lines.remove(start.row + 1);
+            result.push_str(&format!("{}\n", self.lines.remove(start.row + 1)));
         }
+
+        rest.map(|rest| result.push_str(&rest));
 
         if start.row + 1 < self.lines.len() {
             let next_line = self.lines.remove(start.row + 1);
             self.lines[start.row].push_str(&next_line);
         }
+
+        result
     }
 
     pub fn insert_line(&mut self, row: usize) {
@@ -528,5 +548,77 @@ mod tests {
             doc.last_char_of_next_word(Pos { row: 0, col: 2 }),
             Pos { row: 0, col: 5 }
         );
+    }
+
+    #[test]
+    fn it_drain_and_delete_multiple_lines_and_return_buf() {
+        let mut doc = Document {
+            file_path: "ti.ti".to_owned(),
+            lines: vec![
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+            ],
+        };
+
+        let start = Pos { row: 0, col: 2 };
+        let end = Pos { row: 2, col: 4 };
+
+        assert_eq!(doc.delete(start, end), "df\nasdf\nasdf\n".to_owned());
+    }
+
+    #[test]
+    fn it_drain_and_delete_multiple_lines_and_return_buf2() {
+        let mut doc = Document {
+            file_path: "ti.ti".to_owned(),
+            lines: vec![
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+            ],
+        };
+
+        let start = Pos { row: 0, col: 2 };
+        let end = Pos { row: 2, col: 1 };
+
+        assert_eq!(doc.delete(start, end), "df\nasdf\nas".to_owned());
+    }
+
+    #[test]
+    fn it_drain_and_return_buf() {
+        let mut doc = Document {
+            file_path: "ti.ti".to_owned(),
+            lines: vec![
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+            ],
+        };
+
+        let start = Pos { row: 2, col: 1 };
+        let end = Pos { row: 2, col: 2 };
+
+        assert_eq!(doc.delete(start, end), "sd".to_owned());
+    }
+
+    #[test]
+    fn it_drain_and_return_buf2() {
+        let mut doc = Document {
+            file_path: "ti.ti".to_owned(),
+            lines: vec![
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+            ],
+        };
+
+        let start = Pos { row: 2, col: 1 };
+        let end = Pos { row: 2, col: 4 };
+
+        assert_eq!(doc.delete(start, end), "sdf\n".to_owned());
     }
 }

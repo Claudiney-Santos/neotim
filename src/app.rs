@@ -1,6 +1,11 @@
 use std::io::{self, Read, stdin};
 
-use crate::{BACKSPACE, ENTER, ESC, cursor::Cursor, document::Document, viewport::Viewport};
+use crate::{
+    BACKSPACE, ENTER, ESC,
+    cursor::Cursor,
+    document::{Document, Pos},
+    viewport::Viewport,
+};
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum Mode {
@@ -119,6 +124,9 @@ impl App {
                 cursor.bound_col(doc, *mode);
             }
 
+            (Insert, ESC) => {
+                cursor.bound_col(doc, mode.set(Normal));
+            }
             // (Mode::Normal, 'v') => {
             //     context.mode = Mode::Visual(cursor.y * screen.width + cursor.x);
             // }
@@ -133,9 +141,6 @@ impl App {
             //     context.mode = Mode::Normal;
             //     cursor.reset(screen, context.mode);
             // }
-            (Insert, ESC) => {
-                cursor.bound_col(doc, mode.set(Normal));
-            }
             // (Mode::Visual(landmark), 'D') => {
             //     let cursor_raw = cursor.y * screen.width + cursor.x;
             //     let start = min(*landmark, cursor_raw);
@@ -187,36 +192,60 @@ impl App {
             //     context.mode = Mode::Normal;
             //     cursor.reset(screen, context.mode);
             // }
-            // (Mode::Delete, 'd') => {
-            //     move_block_vertically(screen, cursor.y + 1, screen.line_count - cursor.y, -1)?;
-            //
-            //     context.mode = Mode::Normal;
-            //     cursor.reset(screen, context.mode);
-            // }
-            // (Mode::Delete, 'j') => {
-            //     move_block_vertically(
-            //         screen,
-            //         y_bounded(cursor.y as isize + 2, screen),
-            //         screen.line_count - cursor.y - 1,
-            //         -2,
-            //     )?;
-            //
-            //     context.mode = Mode::Normal;
-            //     cursor.reset(screen, context.mode);
-            // }
-            // (Mode::Delete, 'k') => {
-            //     move_block_vertically(screen, cursor.y + 1, screen.line_count - cursor.y - 1, -2)?;
-            //
-            //     context.mode = Mode::Normal;
-            //     cursor.y -= 1;
-            //     cursor.reset(screen, context.mode);
-            // }
-            // (Mode::Delete, _) => {
-            //     context.mode = Mode::Normal;
-            // }
-            // (Mode::Normal, 'd') => {
-            //     context.mode = Mode::Delete;
-            // }
+            (Delete, 'd') => {
+                let start = Pos {
+                    row: cursor.row,
+                    col: 0,
+                };
+
+                let end = cursor.clone().go_to_end_of_line(doc, Insert).to_pos();
+
+                doc.delete(start, end);
+                cursor.bound_row(doc);
+                mode.set(Normal);
+            }
+            (Delete, 'j') => {
+                if doc.row_bound() <= cursor.row {
+                    mode.set(Normal);
+                    return Ok(true);
+                }
+
+                let start = Pos {
+                    row: cursor.row,
+                    col: 0,
+                };
+                let end = cursor
+                    .clone()
+                    .down(doc)
+                    .go_to_end_of_line(doc, Insert)
+                    .to_pos();
+
+                doc.delete(start, end);
+                cursor.bound_row(doc);
+                mode.set(Normal);
+            }
+            (Delete, 'k') => {
+                if cursor.row == 0 {
+                    mode.set(Normal);
+                    return Ok(true);
+                }
+
+                let start = Pos {
+                    row: cursor.row - 1,
+                    col: 0,
+                };
+                let end = cursor.clone().go_to_end_of_line(doc, Insert).to_pos();
+
+                doc.delete(start, end);
+                cursor.up().bound_row(doc);
+                mode.set(Normal);
+            }
+            (Delete, _) => {
+                mode.set(Normal);
+            }
+            (Normal, 'd') => {
+                mode.set(Delete);
+            }
             (Normal, 'g') => {
                 let key = get_key_pressed()?;
 

@@ -112,6 +112,15 @@ impl Document {
         result
     }
 
+    // pub fn delete_by_line(&mut self, start: usize, end: usize) -> String {
+    //     let mut result = String::new();
+    //     for i in start..=end {
+    //         result.push_str(&self.lines.remove(i));
+    //     }
+    //
+    //     result
+    // }
+
     pub fn insert_line(&mut self, row: usize) {
         self.lines.insert(row, String::new())
     }

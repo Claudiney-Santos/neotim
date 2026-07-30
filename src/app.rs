@@ -23,6 +23,7 @@ pub enum Mode {
     Normal,
     Replace,
     Delete,
+    Copy,
     Insert,
     Visual(Pos),
 }
@@ -266,6 +267,68 @@ impl App {
                 cursor.bound_row(doc);
                 mode.set(Normal);
             }
+            (Normal, 'D') => {
+                undo.push(doc.snapshot(), cursor.clone(), Normal);
+                *clipboard = Clipboard::Normal(doc.delete(
+                    cursor.to_pos(),
+                    cursor.clone().go_to_end_of_line(doc, Normal).to_pos(),
+                ));
+            }
+            (Normal, 'Y') => {
+                *clipboard = Clipboard::Normal(doc.copy(
+                    cursor.to_pos(),
+                    cursor.clone().go_to_end_of_line(doc, Normal).to_pos(),
+                ));
+            }
+            (Copy, 'y') => {
+                let start = Pos {
+                    row: cursor.row,
+                    col: 0,
+                };
+
+                let end = cursor.clone().go_to_end_of_line(doc, Insert).to_pos();
+
+                *clipboard = Clipboard::Line(doc.copy(start, end));
+                cursor.bound_row(doc);
+                mode.set(Normal);
+            }
+            (Copy, 'j') => {
+                if doc.row_bound() <= cursor.row {
+                    mode.set(Normal);
+                    return Ok(true);
+                }
+
+                let start = Pos {
+                    row: cursor.row,
+                    col: 0,
+                };
+                let end = cursor
+                    .clone()
+                    .down(doc)
+                    .go_to_end_of_line(doc, Insert)
+                    .to_pos();
+
+                *clipboard = Clipboard::Line(doc.copy(start, end));
+                cursor.bound_row(doc);
+                mode.set(Normal);
+            }
+            (Copy, 'k') => {
+                undo.push(doc.snapshot(), cursor.clone(), Normal);
+                if cursor.row == 0 {
+                    mode.set(Normal);
+                    return Ok(true);
+                }
+
+                let start = Pos {
+                    row: cursor.row - 1,
+                    col: 0,
+                };
+                let end = cursor.clone().go_to_end_of_line(doc, Insert).to_pos();
+
+                *clipboard = Clipboard::Line(doc.delete(start, end));
+                cursor.up().bound_row(doc);
+                mode.set(Normal);
+            }
             (Delete, 'j') => {
                 undo.push(doc.snapshot(), cursor.clone(), Normal);
                 if doc.row_bound() <= cursor.row {
@@ -304,11 +367,14 @@ impl App {
                 cursor.up().bound_row(doc);
                 mode.set(Normal);
             }
-            (Delete, _) => {
+            (Copy | Delete, _) => {
                 mode.set(Normal);
             }
             (Normal, 'd') => {
                 mode.set(Delete);
+            }
+            (Normal, 'y') => {
+                mode.set(Copy);
             }
             (Normal, 'g') => {
                 let key = get_key_pressed()?;

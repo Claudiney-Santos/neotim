@@ -73,12 +73,10 @@ impl Document {
         final_pos
     }
 
-    pub fn copy(&mut self, start: Pos, end: Pos) -> String {
+    pub fn copy(&mut self, from: Pos, to: Pos) -> String {
+        let (start, end) = if from < to { (from, to) } else { (to, from) };
+
         let mut result = String::new();
-        assert!(
-            start.row < end.row || (start.row == end.row && start.col <= end.col),
-            "You messed up with start and end boundaries"
-        );
 
         let mut first_line = self.lines[start.row].clone();
         first_line.push('\n');
@@ -87,7 +85,7 @@ impl Document {
             return first_line
                 .chars()
                 .skip(start.col)
-                .take(end.col + 1)
+                .take(end.col + 1 - start.col)
                 .collect::<String>();
         }
 
@@ -101,13 +99,13 @@ impl Document {
         let mut last_line = self.lines[end.row].clone();
         last_line.push('\n');
 
-        result.push_str(&last_line.chars().take(end.col + 1).collect::<String>());
+        result.push_str(&last_line.chars().take(end.col).collect::<String>());
 
         result
     }
 
-    pub fn delete(&mut self, pos: Pos, pos2: Pos) -> String {
-        let (start, end) = if pos < pos2 { (pos, pos2) } else { (pos2, pos) };
+    pub fn delete(&mut self, from: Pos, to: Pos) -> String {
+        let (start, end) = if from < to { (from, to) } else { (to, from) };
         let del_start = start.col == self.lines[start.row].len();
         let del_end = end.col == self.lines[end.row].len();
 

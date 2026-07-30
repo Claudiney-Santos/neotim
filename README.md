@@ -1,6 +1,6 @@
-# Tim
+# Tim (Ti improved)
 
-Tim is a small terminal text editor inspired by ti. It is a toy project, but it
+Tim is a small terminal text editor inspired by [ti](https://github.com/tiagoGottardo/ti). It is a toy project, but it
 already supports the core editing loop: normal mode, insert mode, visual
 selection, movement, saving, quitting, undo, and basic yank/delete/paste
 operations.

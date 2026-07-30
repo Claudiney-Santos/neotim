@@ -101,7 +101,7 @@ impl Cursor {
     }
 
     pub fn go_to_start_of_line(&mut self, doc: &Document) -> &mut Self {
-        self.col = doc.get_content()[self.row]
+        self.col = doc.lines[self.row]
             .chars()
             .enumerate()
             .find(|(_, ch)| *ch != ' ')

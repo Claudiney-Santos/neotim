@@ -32,7 +32,7 @@ impl Viewport {
         if self.top_row + self.height - ROW_DISTANCE < cursor.row {
             self.top_row = min(
                 cursor.row + ROW_DISTANCE - self.height,
-                doc.get_content().len() - self.height - 1,
+                doc.lines.len() - self.height - 1,
             );
         }
 

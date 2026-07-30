@@ -6,7 +6,7 @@ Toy vi like text editor
 - [X] Finish refactor
 - [X] Implement viewport
 - [ ] Implement visual mode
-- [ ] Support implement copy, cut and paste
+- [X] Support implement copy, cut and paste
 - [ ] Support unicode
 - [ ] Support scrool viewport
 - [ ] Support window resize

@@ -28,8 +28,8 @@ impl PartialOrd for Pos {
 }
 
 pub struct Document {
-    file_path: String,
-    lines: Vec<String>,
+    pub file_path: String,
+    pub lines: Vec<String>,
 }
 
 impl Document {
@@ -45,10 +45,6 @@ impl Document {
                 .map(|line| line.to_owned())
                 .collect::<Vec<String>>(),
         })
-    }
-
-    pub fn get_content(&self) -> &Vec<String> {
-        &self.lines
     }
 
     pub fn save(&self) -> io::Result<()> {

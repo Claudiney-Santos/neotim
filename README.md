@@ -5,7 +5,8 @@ Toy vi like text editor
 ## Next Steps
 - [X] Finish refactor
 - [X] Implement viewport
-- [ ] Implement visual mode
+- [X] Implement visual mode
+- [X] Implement join (Normal and Visual)
 - [X] Support implement copy, cut and paste
 - [ ] Support unicode
 - [ ] Support scrool viewport

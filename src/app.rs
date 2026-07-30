@@ -1,5 +1,5 @@
 use std::{
-    cmp::min,
+    cmp::{max, min},
     io::{self, Read, stdin},
 };
 
@@ -113,6 +113,31 @@ impl App {
             }
             (Normal | Visual(_), 'e') => {
                 cursor.go_to_pos(doc.last_char_of_next_word(cursor.to_pos()));
+            }
+            (Normal, 'J') => {
+                undo.push(doc.snapshot(), cursor.clone(), *mode);
+
+                let pos = cursor.go_to_end_of_line(doc, Insert).to_pos();
+
+                doc.delete(pos, pos);
+                doc.insert(pos, " ");
+            }
+            (Visual(landmark), 'J') => {
+                undo.push(doc.snapshot(), cursor.clone(), *mode);
+
+                let from = min(landmark, cursor.to_pos());
+                let to = max(landmark, cursor.to_pos());
+
+                cursor.go_to_pos(from);
+
+                for _ in 0..max(1, to.row - from.row) {
+                    let pos = cursor.go_to_end_of_line(doc, Insert).to_pos();
+
+                    doc.delete(pos, pos);
+                    doc.insert(pos, " ");
+                }
+
+                mode.set(Normal);
             }
             (Normal, 'A') => {
                 undo.push(doc.snapshot(), cursor.clone(), *mode);

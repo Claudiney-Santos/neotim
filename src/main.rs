@@ -1,11 +1,11 @@
 use std::{panic, process::Command};
-use ti::{app::*, render_buffer::RenderBuffer, *};
+use ti::{app::*, key::get_key_pressed, render_buffer::RenderBuffer, *};
 
 fn main() -> anyhow::Result<()> {
     let mut app = App::new()?;
 
     panic::set_hook(Box::new(|panic_info| {
-        print!("{CLEAR_SCREEN}\x1b[2 q");
+        print!("{DISABLE_MOUSE}{CLEAR_SCREEN}\x1b[2 q");
         Command::new("stty").arg("sane").status().unwrap();
 
         println!("🚨 Fuck! Some shit happened.");
@@ -25,8 +25,10 @@ fn main() -> anyhow::Result<()> {
         }
     }));
 
-    Command::new("stty").args(["raw", "-echo"]).status()?;
-    print!("{CLEAR_SCREEN}");
+    Command::new("stty")
+        .args(["raw", "-echo", "min", "0", "time", "1"])
+        .status()?;
+    print!("{ENABLE_MOUSE}{CLEAR_SCREEN}");
 
     let mut front_buffer = RenderBuffer::new();
     let mut back_buffer = RenderBuffer::from(&app);
@@ -54,7 +56,7 @@ fn main() -> anyhow::Result<()> {
         back_buffer = RenderBuffer::from(&app);
     }
 
-    print!("{CLEAR_SCREEN}");
+    print!("{DISABLE_MOUSE}{CLEAR_SCREEN}");
     Command::new("stty").arg("sane").status()?;
 
     Ok(())

@@ -1,12 +1,9 @@
-use std::{
-    cmp::{max, min},
-    io::{self, Read, stdin},
-};
+use std::cmp::{max, min};
 
 use crate::{
-    BACKSPACE, ENTER, ESC,
     cursor::Cursor,
     document::{Document, Pos},
+    key::{Key, get_key_pressed},
     undo::UndoStack,
     viewport::Viewport,
 };
@@ -44,13 +41,6 @@ pub struct App {
     pub clipboard: Clipboard,
 }
 
-pub fn get_key_pressed() -> io::Result<char> {
-    let mut key = [0; 1];
-    stdin().read_exact(&mut key)?;
-
-    Ok(key[0] as char)
-}
-
 impl App {
     pub fn new() -> anyhow::Result<Self> {
         Ok(Self {
@@ -63,7 +53,8 @@ impl App {
         })
     }
 
-    pub fn handle_input(&mut self, key: char) -> anyhow::Result<bool> {
+    pub fn handle_input(&mut self, key: Key) -> anyhow::Result<bool> {
+        use Key::*;
         use Mode::*;
 
         let App {
@@ -76,45 +67,45 @@ impl App {
         } = self;
 
         match (*mode, key) {
-            (Normal | Visual(_), 'Q') => return Ok(false),
-            (Normal | Visual(_), 'W') => doc.save()?,
-            (Normal | Visual(_), 'h') => {
+            (Normal | Visual(_), Sym('Q')) => return Ok(false),
+            (Normal | Visual(_), Sym('W')) => doc.save()?,
+            (Normal | Visual(_), Sym('h')) => {
                 cursor.bound_col(doc, *mode).left();
             }
-            (Normal | Visual(_), 'j') => {
+            (Normal | Visual(_), Sym('j') | ArrowDown) => {
                 cursor.down(doc);
             }
-            (Normal | Visual(_), 'k') => {
+            (Normal | Visual(_), Sym('k') | ArrowUp) => {
                 cursor.up();
             }
-            (Normal | Visual(_), 'l') => {
+            (Normal | Visual(_), Sym('l') | ArrowRight) => {
                 cursor.right(doc, *mode);
             }
-            (Normal, 'i') => {
+            (Normal, Sym('i')) => {
                 undo.push(doc.snapshot(), cursor.clone(), *mode);
                 cursor.bound_col(doc, mode.set(Insert));
             }
-            (Normal | Visual(_), 'u') => {
+            (Normal | Visual(_), Sym('u')) => {
                 if let Some(snapshot) = undo.pop() {
                     doc.restore(snapshot.0);
                     *cursor = snapshot.1;
                     mode.set(snapshot.2);
                 }
             }
-            (Normal, 'I') => {
+            (Normal, Sym('I')) => {
                 mode.set(Insert);
                 cursor.go_to_start_of_line(doc);
             }
-            (Normal | Visual(_), 'w') => {
+            (Normal | Visual(_), Sym('w')) => {
                 cursor.go_to_pos(doc.next_word(cursor.to_pos()));
             }
-            (Normal | Visual(_), 'b') => {
+            (Normal | Visual(_), Sym('b')) => {
                 cursor.go_to_pos(doc.prev_word(cursor.to_pos()));
             }
-            (Normal | Visual(_), 'e') => {
+            (Normal | Visual(_), Sym('e')) => {
                 cursor.go_to_pos(doc.last_char_of_next_word(cursor.to_pos()));
             }
-            (Normal, 'J') => {
+            (Normal, Sym('J')) => {
                 undo.push(doc.snapshot(), cursor.clone(), *mode);
 
                 let pos = cursor.go_to_end_of_line(doc, Insert).to_pos();
@@ -122,7 +113,7 @@ impl App {
                 doc.delete(pos, pos);
                 doc.insert(pos, " ");
             }
-            (Visual(landmark), 'J') => {
+            (Visual(landmark), Sym('J')) => {
                 undo.push(doc.snapshot(), cursor.clone(), *mode);
 
                 let from = min(landmark, cursor.to_pos());
@@ -139,27 +130,27 @@ impl App {
 
                 mode.set(Normal);
             }
-            (Normal, 'A') => {
+            (Normal, Sym('A')) => {
                 undo.push(doc.snapshot(), cursor.clone(), *mode);
                 cursor.go_to_end_of_line(doc, mode.set(Insert));
             }
-            (Normal, 's') => {
+            (Normal, Sym('s')) => {
                 undo.push(doc.snapshot(), cursor.clone(), *mode);
                 mode.set(Insert);
                 doc.delete(cursor.to_pos(), cursor.to_pos());
             }
-            (Normal, 'a') => {
+            (Normal, Sym('a')) => {
                 undo.push(doc.snapshot(), cursor.clone(), *mode);
                 mode.set(Insert);
                 cursor.right(doc, self.mode);
             }
-            (Normal, 'o') => {
+            (Normal, Sym('o')) => {
                 undo.push(doc.snapshot(), cursor.clone(), *mode);
                 mode.set(Insert);
                 doc.insert_line(cursor.row + 1);
                 cursor.down(doc);
             }
-            (Replace, ch) => {
+            (Replace, Sym(ch)) => {
                 undo.push(doc.snapshot(), cursor.clone(), *mode);
                 if !ch.is_control() {
                     doc.delete(cursor.to_pos(), cursor.to_pos());
@@ -168,25 +159,28 @@ impl App {
 
                 mode.set(Normal);
             }
-            (Normal, 'r') => {
+            (Replace, _) => {
+                mode.set(Normal);
+            }
+            (Normal, Sym('r')) => {
                 mode.set(Replace);
             }
-            (Normal, 'x') => {
+            (Normal, Sym('x')) => {
                 undo.push(doc.snapshot(), cursor.clone(), *mode);
                 *clipboard = Clipboard::Normal(doc.delete(cursor.to_pos(), cursor.to_pos()));
                 cursor.bound_col(doc, *mode);
             }
 
-            (Insert, ESC) => {
+            (Insert, Escape) => {
                 cursor.bound_col(doc, mode.set(Normal));
             }
-            (Normal, 'v') => {
+            (Normal, Sym('v')) => {
                 mode.set(Visual(cursor.to_pos()));
             }
-            (Visual(_), ESC) => {
+            (Visual(_), Escape) => {
                 mode.set(Normal);
             }
-            (Visual(landmark), 'y') => {
+            (Visual(landmark), Sym('y')) => {
                 let cursor_pos = cursor.clone().bound_col(doc, *mode).to_pos();
                 *clipboard = Clipboard::Normal(doc.copy(landmark, cursor_pos));
                 cursor
@@ -195,7 +189,7 @@ impl App {
                     .bound_col(doc, *mode);
                 mode.set(Normal);
             }
-            (Visual(landmark), 'Y') => {
+            (Visual(landmark), Sym('Y')) => {
                 let cursor_pos = cursor.clone().bound_col(doc, *mode).to_pos();
 
                 let (mut start, mut end) = if landmark < cursor_pos {
@@ -211,7 +205,7 @@ impl App {
                 cursor.go_to_pos(start).bound_row(doc).bound_col(doc, *mode);
                 mode.set(Normal);
             }
-            (Visual(landmark), 'D') => {
+            (Visual(landmark), Sym('D')) => {
                 undo.push(doc.snapshot(), cursor.clone(), *mode);
                 let cursor_pos = cursor.clone().bound_col(doc, *mode).to_pos();
 
@@ -228,7 +222,7 @@ impl App {
                 cursor.go_to_pos(start).bound_row(doc).bound_col(doc, *mode);
                 mode.set(Normal);
             }
-            (Visual(landmark), 'd') => {
+            (Visual(landmark), Sym('d')) => {
                 undo.push(doc.snapshot(), cursor.clone(), *mode);
                 let cursor_pos = cursor.clone().bound_col(doc, *mode).to_pos();
 
@@ -239,7 +233,7 @@ impl App {
                     .bound_col(doc, *mode);
                 mode.set(Normal);
             }
-            (Normal, 'P') => {
+            (Normal, Sym('P')) => {
                 undo.push(doc.snapshot(), cursor.clone(), Normal);
 
                 match clipboard {
@@ -258,7 +252,7 @@ impl App {
                     _ => {}
                 }
             }
-            (Normal, 'p') => {
+            (Normal, Sym('p')) => {
                 undo.push(doc.snapshot(), cursor.clone(), Normal);
                 match clipboard {
                     Clipboard::Normal(s) => {
@@ -279,7 +273,7 @@ impl App {
                     _ => {}
                 }
             }
-            (Delete, 'd') => {
+            (Delete, Sym('d')) => {
                 undo.push(doc.snapshot(), cursor.clone(), Normal);
                 let start = Pos {
                     row: cursor.row,
@@ -292,20 +286,20 @@ impl App {
                 cursor.bound_row(doc);
                 mode.set(Normal);
             }
-            (Normal, 'D') => {
+            (Normal, Sym('D')) => {
                 undo.push(doc.snapshot(), cursor.clone(), Normal);
                 *clipboard = Clipboard::Normal(doc.delete(
                     cursor.to_pos(),
                     cursor.clone().go_to_end_of_line(doc, Normal).to_pos(),
                 ));
             }
-            (Normal, 'Y') => {
+            (Normal, Sym('Y')) => {
                 *clipboard = Clipboard::Normal(doc.copy(
                     cursor.to_pos(),
                     cursor.clone().go_to_end_of_line(doc, Normal).to_pos(),
                 ));
             }
-            (Copy, 'y') => {
+            (Copy, Sym('y')) => {
                 let start = Pos {
                     row: cursor.row,
                     col: 0,
@@ -317,7 +311,7 @@ impl App {
                 cursor.bound_row(doc);
                 mode.set(Normal);
             }
-            (Copy, 'j') => {
+            (Copy, Sym('j')) => {
                 if doc.row_bound() <= cursor.row {
                     mode.set(Normal);
                     return Ok(true);
@@ -337,7 +331,7 @@ impl App {
                 cursor.bound_row(doc);
                 mode.set(Normal);
             }
-            (Copy, 'k') => {
+            (Copy, Sym('k')) => {
                 undo.push(doc.snapshot(), cursor.clone(), Normal);
                 if cursor.row == 0 {
                     mode.set(Normal);
@@ -354,7 +348,7 @@ impl App {
                 cursor.up().bound_row(doc);
                 mode.set(Normal);
             }
-            (Delete, 'j') => {
+            (Delete, Sym('j')) => {
                 undo.push(doc.snapshot(), cursor.clone(), Normal);
                 if doc.row_bound() <= cursor.row {
                     mode.set(Normal);
@@ -375,7 +369,7 @@ impl App {
                 cursor.bound_row(doc);
                 mode.set(Normal);
             }
-            (Delete, 'k') => {
+            (Delete, Sym('k')) => {
                 undo.push(doc.snapshot(), cursor.clone(), Normal);
                 if cursor.row == 0 {
                     mode.set(Normal);
@@ -395,28 +389,28 @@ impl App {
             (Copy | Delete, _) => {
                 mode.set(Normal);
             }
-            (Normal, 'd') => {
+            (Normal, Sym('d')) => {
                 mode.set(Delete);
             }
-            (Normal, 'y') => {
+            (Normal, Sym('y')) => {
                 mode.set(Copy);
             }
-            (Normal, 'g') => {
+            (Normal, Sym('g')) => {
                 let key = get_key_pressed()?;
 
-                if key != 'g' {
+                if key != Key::Sym('g') {
                     return self.handle_input(key);
                 }
 
                 cursor.go_to_first_line();
             }
-            (Normal | Visual(_), 'G') => {
+            (Normal | Visual(_), Sym('G')) => {
                 cursor.go_to_last_char(doc);
             }
-            (Normal, ENTER) => {
+            (Normal, Enter) => {
                 cursor.down(doc).go_to_start_of_line(doc);
             }
-            (Normal, BACKSPACE) => {
+            (Normal, Backspace) => {
                 if cursor.col == 0 {
                     cursor.up().go_to_end_of_line(doc, *mode);
                     return Ok(true);
@@ -424,11 +418,11 @@ impl App {
 
                 cursor.left();
             }
-            (Insert, ENTER) => {
+            (Insert, Enter) => {
                 doc.insert(cursor.to_pos(), "\n");
                 cursor.down(doc);
             }
-            (Insert, BACKSPACE) => {
+            (Insert, Backspace) => {
                 if cursor.row == 0 && cursor.col == 0 {
                     return Ok(true);
                 }
@@ -442,8 +436,8 @@ impl App {
                 cursor.bound_col(doc, *mode).left();
                 doc.delete(cursor.to_pos(), cursor.to_pos());
             }
-            (Insert, ch) if ch.is_control() => {}
-            (Insert, ch) => {
+            (Insert, Sym(ch)) if ch.is_control() => {}
+            (Insert, Sym(ch)) => {
                 doc.insert(cursor.to_pos(), &ch.to_string());
                 cursor.right(doc, *mode);
             }

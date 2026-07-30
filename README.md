@@ -1,12 +1,13 @@
 # Ti
 
-Toy vim like text editor
+Toy vi like text editor
 
 ## Next Steps
 - [X] Finish refactor
-- [ ] Implement viewport
+- [X] Implement viewport
 - [ ] Implement visual mode
-- [ ] Support implement copy, cut and paste
+- [X] Support implement copy, cut and paste
 - [ ] Support unicode
 - [ ] Support scrool viewport
 - [ ] Support window resize
+- [ ] Support stream of content instead of read all doc

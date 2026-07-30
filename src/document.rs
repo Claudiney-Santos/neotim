@@ -1,7 +1,4 @@
-// TODO: create document struct
-// Its responsability is handle the reading, updating, and writing file document
-
-use std::cmp::max;
+use std::cmp::{Ordering, max};
 use std::{
     env, fs,
     io::{self},
@@ -9,15 +6,30 @@ use std::{
 
 use crate::{app::Mode, error::TiError};
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Pos {
     pub row: usize,
     pub col: usize,
 }
 
+impl Ord for Pos {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.row.cmp(&other.row) {
+            Ordering::Equal => self.col.cmp(&other.col),
+            o => o,
+        }
+    }
+}
+
+impl PartialOrd for Pos {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 pub struct Document {
-    file_path: String,
-    lines: Vec<String>,
+    pub file_path: String,
+    pub lines: Vec<String>,
 }
 
 impl Document {
@@ -35,15 +47,11 @@ impl Document {
         })
     }
 
-    pub fn get_content(&self) -> &Vec<String> {
-        &self.lines
-    }
-
     pub fn save(&self) -> io::Result<()> {
         fs::write(&self.file_path, self.lines.join("\n"))
     }
 
-    pub fn insert(&mut self, pos: Pos, str: &str) {
+    pub fn insert(&mut self, pos: Pos, str: &str) -> Pos {
         let mut it = str.split("\n");
 
         let rest = self.lines[pos.row].drain(pos.col..).collect::<String>();
@@ -55,44 +63,99 @@ impl Document {
             self.lines.insert(pos.row + i + 1, s.to_owned());
         });
 
+        let final_pos = Pos {
+            row: pos.row + str.matches("\n").count(),
+            col: self.lines[pos.row + str.matches("\n").count()].len(),
+        };
+
         self.lines[pos.row + str.matches("\n").count()].push_str(&rest);
+
+        final_pos
     }
 
-    pub fn delete(&mut self, start: Pos, end: Pos) {
-        assert!(
-            start.row < end.row || (start.row == end.row && start.col <= end.col),
-            "You messed up with start and end boundaries"
-        );
+    pub fn copy(&mut self, from: Pos, to: Pos) -> String {
+        let (start, end) = if from < to { (from, to) } else { (to, from) };
 
+        let mut result = String::new();
+
+        let mut first_line = self.lines[start.row].clone();
+        first_line.push('\n');
+
+        if start.row == end.row {
+            return first_line
+                .chars()
+                .skip(start.col)
+                .take(end.col + 1 - start.col)
+                .collect::<String>();
+        }
+
+        result.push_str(&first_line.chars().skip(start.col).collect::<String>());
+
+        for i in start.row + 1..end.row {
+            result.push_str(&self.lines[i].clone());
+            result.push('\n');
+        }
+
+        let mut last_line = self.lines[end.row].clone();
+        last_line.push('\n');
+
+        result.push_str(&last_line.chars().take(end.col).collect::<String>());
+
+        result
+    }
+
+    pub fn delete(&mut self, from: Pos, to: Pos) -> String {
+        let (start, end) = if from < to { (from, to) } else { (to, from) };
         let del_start = start.col == self.lines[start.row].len();
         let del_end = end.col == self.lines[end.row].len();
 
+        let mut result = String::new();
+
         if start.row == end.row {
             if !del_start {
-                self.lines[start.row].drain(start.col..end.col + if del_end { 0 } else { 1 });
+                result.push_str(
+                    &self.lines[start.row]
+                        .drain(start.col..end.col + if del_end { 0 } else { 1 })
+                        .collect::<String>(),
+                );
+
+                if del_end {
+                    result.push('\n');
+                }
             }
 
             if del_end && start.row + 1 < self.lines.len() {
                 let next_line = self.lines.remove(start.row + 1);
                 self.lines[start.row].push_str(&next_line);
             }
-            return;
+            return result;
         }
 
         if !del_start {
-            self.lines[start.row].drain(start.col..);
+            result.push_str(&format!(
+                "{}\n",
+                self.lines[start.row].drain(start.col..).collect::<String>()
+            ));
         }
 
-        self.lines[end.row].drain(..end.col + if del_end { 0 } else { 1 });
+        let rest = if !del_end {
+            Some(self.lines[end.row].drain(..=end.col).collect::<String>())
+        } else {
+            None
+        };
 
         for _ in start.row + 1..end.row + if del_end { 1 } else { 0 } {
-            self.lines.remove(start.row + 1);
+            result.push_str(&format!("{}\n", self.lines.remove(start.row + 1)));
         }
+
+        rest.map(|rest| result.push_str(&rest));
 
         if start.row + 1 < self.lines.len() {
             let next_line = self.lines.remove(start.row + 1);
             self.lines[start.row].push_str(&next_line);
         }
+
+        result
     }
 
     pub fn insert_line(&mut self, row: usize) {
@@ -402,9 +465,10 @@ mod tests {
             lines: vec!["asdf".to_owned(), "----".to_owned()],
         };
 
-        doc.insert(Pos { row: 0, col: 2 }, "mise");
+        let pos = doc.insert(Pos { row: 0, col: 2 }, "mise");
 
         assert_eq!(doc.lines, vec!["asmisedf".to_owned(), "----".to_owned()]);
+        assert_eq!(pos, Pos { row: 0, col: 6 })
     }
 
     #[test]
@@ -414,12 +478,13 @@ mod tests {
             lines: vec!["asdf".to_owned(), "----".to_owned()],
         };
 
-        doc.insert(Pos { row: 0, col: 2 }, "mise\n123");
+        let pos = doc.insert(Pos { row: 0, col: 2 }, "mise\n123");
 
         assert_eq!(
             doc.lines,
             vec!["asmise".to_owned(), "123df".to_owned(), "----".to_owned()]
         );
+        assert_eq!(pos, Pos { row: 1, col: 3 })
     }
 
     #[test]
@@ -429,12 +494,13 @@ mod tests {
             lines: vec!["asdf".to_owned(), "----".to_owned()],
         };
 
-        doc.insert(Pos { row: 0, col: 4 }, "\n123");
+        let pos = doc.insert(Pos { row: 0, col: 4 }, "\n123");
 
         assert_eq!(
             doc.lines,
             vec!["asdf".to_owned(), "123".to_owned(), "----".to_owned()]
         );
+        assert_eq!(pos, Pos { row: 1, col: 3 })
     }
 
     #[test]
@@ -444,12 +510,13 @@ mod tests {
             lines: vec!["asdf".to_owned(), "----".to_owned()],
         };
 
-        doc.insert(Pos { row: 0, col: 4 }, "123\n");
+        let pos = doc.insert(Pos { row: 0, col: 4 }, "123\n");
 
         assert_eq!(
             doc.lines,
             vec!["asdf123".to_owned(), "".to_owned(), "----".to_owned()]
         );
+        assert_eq!(pos, Pos { row: 1, col: 0 })
     }
 
     #[test]
@@ -531,5 +598,77 @@ mod tests {
             doc.last_char_of_next_word(Pos { row: 0, col: 2 }),
             Pos { row: 0, col: 5 }
         );
+    }
+
+    #[test]
+    fn it_drain_and_delete_multiple_lines_and_return_buf() {
+        let mut doc = Document {
+            file_path: "ti.ti".to_owned(),
+            lines: vec![
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+            ],
+        };
+
+        let start = Pos { row: 0, col: 2 };
+        let end = Pos { row: 2, col: 4 };
+
+        assert_eq!(doc.delete(start, end), "df\nasdf\nasdf\n".to_owned());
+    }
+
+    #[test]
+    fn it_drain_and_delete_multiple_lines_and_return_buf2() {
+        let mut doc = Document {
+            file_path: "ti.ti".to_owned(),
+            lines: vec![
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+            ],
+        };
+
+        let start = Pos { row: 0, col: 2 };
+        let end = Pos { row: 2, col: 1 };
+
+        assert_eq!(doc.delete(start, end), "df\nasdf\nas".to_owned());
+    }
+
+    #[test]
+    fn it_drain_and_return_buf() {
+        let mut doc = Document {
+            file_path: "ti.ti".to_owned(),
+            lines: vec![
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+            ],
+        };
+
+        let start = Pos { row: 2, col: 1 };
+        let end = Pos { row: 2, col: 2 };
+
+        assert_eq!(doc.delete(start, end), "sd".to_owned());
+    }
+
+    #[test]
+    fn it_drain_and_return_buf2() {
+        let mut doc = Document {
+            file_path: "ti.ti".to_owned(),
+            lines: vec![
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+                "asdf".to_owned(),
+            ],
+        };
+
+        let start = Pos { row: 2, col: 1 };
+        let end = Pos { row: 2, col: 4 };
+
+        assert_eq!(doc.delete(start, end), "sdf\n".to_owned());
     }
 }

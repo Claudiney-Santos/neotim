@@ -1,5 +1,3 @@
-// TODO: create the render_buffer
-// Its reponsabity is result on the final string that modifies the terminal content
 use crate::{
     HIDE_CURSOR, SHOW_CURSOR,
     app::{App, Mode},
@@ -63,7 +61,7 @@ impl RenderBuffer {
         let mut render_buffer = Self::new();
 
         for (row, line) in doc
-            .get_content()
+            .lines
             .iter()
             .skip(viewport.top_row)
             .take(viewport.height)

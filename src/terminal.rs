@@ -12,7 +12,6 @@ unsafe extern "C" {
     fn ioctl(fd: i32, request: usize, out: *mut WinSize) -> i32;
 }
 
-/// Returns the (width, height) of the terminal.
 pub fn get_terminal_size() -> (usize, usize) {
     let mut size = WinSize {
         row: 0,

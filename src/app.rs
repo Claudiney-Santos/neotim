@@ -161,7 +161,6 @@ impl App {
                 mode.set(Normal);
             }
             (Visual(landmark), 'y') => {
-                undo.push(doc.snapshot(), cursor.clone(), *mode);
                 let cursor_pos = cursor.clone().bound_col(doc, *mode).to_pos();
                 *clipboard = Clipboard::Normal(doc.copy(landmark, cursor_pos));
                 cursor
@@ -171,7 +170,6 @@ impl App {
                 mode.set(Normal);
             }
             (Visual(landmark), 'Y') => {
-                undo.push(doc.snapshot(), cursor.clone(), *mode);
                 let cursor_pos = cursor.clone().bound_col(doc, *mode).to_pos();
 
                 let (mut start, mut end) = if landmark < cursor_pos {

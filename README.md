@@ -10,3 +10,4 @@ Toy vi like text editor
 - [ ] Support unicode
 - [ ] Support scrool viewport
 - [ ] Support window resize
+- [ ] Support stream of content instead of read all doc

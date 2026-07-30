@@ -1,6 +1,6 @@
-# Tim (Ti improved)
+# Neotim
 
-Tim is a small terminal text editor inspired by [ti](https://github.com/tiagoGottardo/ti). It is a toy project, but it
+Neotim is a small terminal text editor inspired by [tim](https://github.com/Thales3006/tim). It is a toy project, but it
 already supports the core editing loop: normal mode, insert mode, visual
 selection, movement, saving, quitting, undo, and basic yank/delete/paste
 operations.

@@ -1,4 +1,7 @@
-use std::io::{self, Read, stdin};
+use std::{
+    cmp::min,
+    io::{self, Read, stdin},
+};
 
 use crate::{
     BACKSPACE, ENTER, ESC,
@@ -160,26 +163,18 @@ impl App {
             (Visual(landmark), 'y') => {
                 undo.push(doc.snapshot(), cursor.clone(), *mode);
                 let cursor_pos = cursor.clone().bound_col(doc, *mode).to_pos();
-
-                let (start, end) = if landmark.row < cursor_pos.row
-                    || (landmark.row == cursor_pos.row && landmark.col <= cursor_pos.col)
-                {
-                    (landmark, cursor_pos)
-                } else {
-                    (cursor_pos, landmark)
-                };
-
-                *clipboard = Clipboard::Normal(doc.copy(start, end));
-                cursor.go_to_pos(start).bound_row(doc).bound_col(doc, *mode);
+                *clipboard = Clipboard::Normal(doc.copy(landmark, cursor_pos));
+                cursor
+                    .go_to_pos(min(landmark, cursor_pos))
+                    .bound_row(doc)
+                    .bound_col(doc, *mode);
                 mode.set(Normal);
             }
             (Visual(landmark), 'Y') => {
                 undo.push(doc.snapshot(), cursor.clone(), *mode);
                 let cursor_pos = cursor.clone().bound_col(doc, *mode).to_pos();
 
-                let (mut start, mut end) = if landmark.row < cursor_pos.row
-                    || (landmark.row == cursor_pos.row && landmark.col <= cursor_pos.col)
-                {
+                let (mut start, mut end) = if landmark < cursor_pos {
                     (landmark, cursor_pos)
                 } else {
                     (cursor_pos, landmark)
@@ -196,9 +191,7 @@ impl App {
                 undo.push(doc.snapshot(), cursor.clone(), *mode);
                 let cursor_pos = cursor.clone().bound_col(doc, *mode).to_pos();
 
-                let (mut start, mut end) = if landmark.row < cursor_pos.row
-                    || (landmark.row == cursor_pos.row && landmark.col <= cursor_pos.col)
-                {
+                let (mut start, mut end) = if landmark < cursor_pos {
                     (landmark, cursor_pos)
                 } else {
                     (cursor_pos, landmark)
@@ -215,16 +208,11 @@ impl App {
                 undo.push(doc.snapshot(), cursor.clone(), *mode);
                 let cursor_pos = cursor.clone().bound_col(doc, *mode).to_pos();
 
-                let (start, end) = if landmark.row < cursor_pos.row
-                    || (landmark.row == cursor_pos.row && landmark.col <= cursor_pos.col)
-                {
-                    (landmark, cursor_pos)
-                } else {
-                    (cursor_pos, landmark)
-                };
-
-                *clipboard = Clipboard::Normal(doc.delete(start, end));
-                cursor.go_to_pos(start).bound_row(doc).bound_col(doc, *mode);
+                *clipboard = Clipboard::Normal(doc.delete(landmark, cursor_pos));
+                cursor
+                    .go_to_pos(min(landmark, cursor_pos))
+                    .bound_row(doc)
+                    .bound_col(doc, *mode);
                 mode.set(Normal);
             }
             (Normal, 'P') => {

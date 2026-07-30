@@ -1,4 +1,4 @@
-use std::cmp::max;
+use std::cmp::{Ordering, max};
 use std::{
     env, fs,
     io::{self},
@@ -6,10 +6,25 @@ use std::{
 
 use crate::{app::Mode, error::TiError};
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Pos {
     pub row: usize,
     pub col: usize,
+}
+
+impl Ord for Pos {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.row.cmp(&other.row) {
+            Ordering::Equal => self.col.cmp(&other.col),
+            o => o,
+        }
+    }
+}
+
+impl PartialOrd for Pos {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 pub struct Document {
@@ -95,15 +110,12 @@ impl Document {
         result
     }
 
-    pub fn delete(&mut self, start: Pos, end: Pos) -> String {
-        let mut result = String::new();
-        assert!(
-            start.row < end.row || (start.row == end.row && start.col <= end.col),
-            "You messed up with start and end boundaries"
-        );
-
+    pub fn delete(&mut self, pos: Pos, pos2: Pos) -> String {
+        let (start, end) = if pos < pos2 { (pos, pos2) } else { (pos2, pos) };
         let del_start = start.col == self.lines[start.row].len();
         let del_end = end.col == self.lines[end.row].len();
+
+        let mut result = String::new();
 
         if start.row == end.row {
             if !del_start {

@@ -55,6 +55,39 @@ impl Document {
         self.lines[pos.row + str.matches("\n").count()].push_str(&rest);
     }
 
+    pub fn copy(&mut self, start: Pos, end: Pos) -> String {
+        let mut result = String::new();
+        assert!(
+            start.row < end.row || (start.row == end.row && start.col <= end.col),
+            "You messed up with start and end boundaries"
+        );
+
+        let mut first_line = self.lines[start.row].clone();
+        first_line.push('\n');
+
+        if start.row == end.row {
+            return first_line
+                .chars()
+                .skip(start.col)
+                .take(end.col + 1)
+                .collect::<String>();
+        }
+
+        result.push_str(&first_line.chars().skip(start.col).collect::<String>());
+
+        for i in start.row + 1..end.row {
+            result.push_str(&self.lines[i].clone());
+            result.push('\n');
+        }
+
+        let mut last_line = self.lines[end.row].clone();
+        last_line.push('\n');
+
+        result.push_str(&last_line.chars().take(end.col + 1).collect::<String>());
+
+        result
+    }
+
     pub fn delete(&mut self, start: Pos, end: Pos) -> String {
         let mut result = String::new();
         assert!(
@@ -111,15 +144,6 @@ impl Document {
 
         result
     }
-
-    // pub fn delete_by_line(&mut self, start: usize, end: usize) -> String {
-    //     let mut result = String::new();
-    //     for i in start..=end {
-    //         result.push_str(&self.lines.remove(i));
-    //     }
-    //
-    //     result
-    // }
 
     pub fn insert_line(&mut self, row: usize) {
         self.lines.insert(row, String::new())

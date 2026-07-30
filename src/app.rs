@@ -157,6 +157,41 @@ impl App {
             (Visual(_), ESC) => {
                 mode.set(Normal);
             }
+            (Visual(landmark), 'y') => {
+                undo.push(doc.snapshot(), cursor.clone(), *mode);
+                let cursor_pos = cursor.clone().bound_col(doc, *mode).to_pos();
+
+                let (start, end) = if landmark.row < cursor_pos.row
+                    || (landmark.row == cursor_pos.row && landmark.col <= cursor_pos.col)
+                {
+                    (landmark, cursor_pos)
+                } else {
+                    (cursor_pos, landmark)
+                };
+
+                *clipboard = Clipboard::Normal(doc.copy(start, end));
+                cursor.go_to_pos(start).bound_row(doc).bound_col(doc, *mode);
+                mode.set(Normal);
+            }
+            (Visual(landmark), 'Y') => {
+                undo.push(doc.snapshot(), cursor.clone(), *mode);
+                let cursor_pos = cursor.clone().bound_col(doc, *mode).to_pos();
+
+                let (mut start, mut end) = if landmark.row < cursor_pos.row
+                    || (landmark.row == cursor_pos.row && landmark.col <= cursor_pos.col)
+                {
+                    (landmark, cursor_pos)
+                } else {
+                    (cursor_pos, landmark)
+                };
+
+                start.col = 0;
+                end.col = doc.col_bound(end.row, *mode);
+
+                *clipboard = Clipboard::Line(doc.copy(start, end));
+                cursor.go_to_pos(start).bound_row(doc).bound_col(doc, *mode);
+                mode.set(Normal);
+            }
             (Visual(landmark), 'D') => {
                 undo.push(doc.snapshot(), cursor.clone(), *mode);
                 let cursor_pos = cursor.clone().bound_col(doc, *mode).to_pos();
@@ -197,7 +232,7 @@ impl App {
 
                 match clipboard {
                     Clipboard::Normal(s) => {
-                        doc.insert(cursor.clone().to_pos(), &s);
+                        cursor.go_to_pos(doc.insert(cursor.clone().to_pos(), &s));
                     }
                     Clipboard::Line(s) => {
                         doc.insert(
@@ -215,7 +250,8 @@ impl App {
                 undo.push(doc.snapshot(), cursor.clone(), Normal);
                 match clipboard {
                     Clipboard::Normal(s) => {
-                        doc.insert(cursor.clone().right(doc, Insert).to_pos(), &s);
+                        let end_pos = doc.insert(cursor.clone().right(doc, Insert).to_pos(), &s);
+                        cursor.go_to_pos(end_pos);
                     }
                     Clipboard::Line(s) => {
                         if s.ends_with("\n") {
@@ -226,11 +262,10 @@ impl App {
                             cursor.clone().go_to_end_of_line(doc, Insert).to_pos(),
                             &format!("\n{s}"),
                         );
+                        cursor.down(doc);
                     }
                     _ => {}
                 }
-
-                cursor.down(doc);
             }
             (Delete, 'd') => {
                 undo.push(doc.snapshot(), cursor.clone(), Normal);

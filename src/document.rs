@@ -40,7 +40,7 @@ impl Document {
         fs::write(&self.file_path, self.lines.join("\n"))
     }
 
-    pub fn insert(&mut self, pos: Pos, str: &str) {
+    pub fn insert(&mut self, pos: Pos, str: &str) -> Pos {
         let mut it = str.split("\n");
 
         let rest = self.lines[pos.row].drain(pos.col..).collect::<String>();
@@ -52,7 +52,14 @@ impl Document {
             self.lines.insert(pos.row + i + 1, s.to_owned());
         });
 
+        let final_pos = Pos {
+            row: pos.row + str.matches("\n").count(),
+            col: self.lines[pos.row + str.matches("\n").count()].len(),
+        };
+
         self.lines[pos.row + str.matches("\n").count()].push_str(&rest);
+
+        final_pos
     }
 
     pub fn copy(&mut self, start: Pos, end: Pos) -> String {
@@ -452,9 +459,10 @@ mod tests {
             lines: vec!["asdf".to_owned(), "----".to_owned()],
         };
 
-        doc.insert(Pos { row: 0, col: 2 }, "mise");
+        let pos = doc.insert(Pos { row: 0, col: 2 }, "mise");
 
         assert_eq!(doc.lines, vec!["asmisedf".to_owned(), "----".to_owned()]);
+        assert_eq!(pos, Pos { row: 0, col: 6 })
     }
 
     #[test]
@@ -464,12 +472,13 @@ mod tests {
             lines: vec!["asdf".to_owned(), "----".to_owned()],
         };
 
-        doc.insert(Pos { row: 0, col: 2 }, "mise\n123");
+        let pos = doc.insert(Pos { row: 0, col: 2 }, "mise\n123");
 
         assert_eq!(
             doc.lines,
             vec!["asmise".to_owned(), "123df".to_owned(), "----".to_owned()]
         );
+        assert_eq!(pos, Pos { row: 1, col: 3 })
     }
 
     #[test]
@@ -479,12 +488,13 @@ mod tests {
             lines: vec!["asdf".to_owned(), "----".to_owned()],
         };
 
-        doc.insert(Pos { row: 0, col: 4 }, "\n123");
+        let pos = doc.insert(Pos { row: 0, col: 4 }, "\n123");
 
         assert_eq!(
             doc.lines,
             vec!["asdf".to_owned(), "123".to_owned(), "----".to_owned()]
         );
+        assert_eq!(pos, Pos { row: 1, col: 3 })
     }
 
     #[test]
@@ -494,12 +504,13 @@ mod tests {
             lines: vec!["asdf".to_owned(), "----".to_owned()],
         };
 
-        doc.insert(Pos { row: 0, col: 4 }, "123\n");
+        let pos = doc.insert(Pos { row: 0, col: 4 }, "123\n");
 
         assert_eq!(
             doc.lines,
             vec!["asdf123".to_owned(), "".to_owned(), "----".to_owned()]
         );
+        assert_eq!(pos, Pos { row: 1, col: 0 })
     }
 
     #[test]

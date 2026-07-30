@@ -2,6 +2,7 @@ pub mod app;
 pub mod cursor;
 pub mod document;
 pub mod error;
+pub mod key;
 pub mod render_buffer;
 pub mod terminal;
 pub mod undo;
@@ -13,6 +14,8 @@ pub const SHOW_CURSOR: &str = "\x1b[?25h";
 pub const BACKSPACE: char = '\x7F';
 pub const ENTER: char = '\r';
 pub const ESC: char = '\x1b';
+pub const ENABLE_MOUSE: &str = "\x1b[?1000h\x1b[?1006h";
+pub const DISABLE_MOUSE: &str = "\x1b[?1000l\x1b[?1006l";
 
 #[macro_export]
 macro_rules! prin {
